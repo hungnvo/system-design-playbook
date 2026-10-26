@@ -1,6 +1,10 @@
 # Build output
 dist/
 
+# Cloudflare Wrangler
+.wrangler/
+node_modules/
+
 # Python
 __pycache__/
 *.pyc

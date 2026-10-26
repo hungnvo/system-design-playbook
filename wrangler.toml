@@ -1,0 +1,5 @@
+# Cloudflare Pages project settings, read by `wrangler pages deploy`,
+# the Makefile and the deploy workflow. `name` sets the address: <name>.pages.dev
+name = "sdplaybook"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"

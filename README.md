@@ -41,16 +41,37 @@ python3 -m http.server 8000 --directory dist
 
 ## Deploy
 
-The `dist/` folder is a static site and works on any static host.
+The site is hosted on Cloudflare Pages. The project name in [`wrangler.toml`](wrangler.toml) sets the address (`<name>.pages.dev`); the Makefile and the deploy workflow both read it from there.
 
-**Cloudflare Pages (direct upload):** Workers & Pages → Create → Pages → Upload assets, then drag in `dist/`. To update, open the project → Create new deployment and upload `dist/` again.
+### From your computer
 
-**Cloudflare Pages (connected to this repo):**
+Requires Node.js 18 or newer (for `npx wrangler`).
 
-| Setting | Value |
-|---|---|
-| Build command | `python3 scripts/build.py` |
-| Build output directory | `dist` |
+```bash
+npx --yes wrangler@4.149.0 login   # one time: opens the browser to sign in to Cloudflare
+make deploy                        # builds, then publishes to <name>.pages.dev
+make deploy-preview                # publishes to a separate preview URL instead
+```
+
+The first `make deploy` asks to create the Pages project if it doesn't exist yet.
+
+### Automatically on every push to `main`
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds and deploys on each push to `main`, and can be run by hand from the Actions tab. One-time setup:
+
+1. In Cloudflare, create an API token: My Profile → API Tokens → Create Token → **Edit Cloudflare Workers** template (or a custom token with **Account → Cloudflare Pages → Edit**).
+2. Copy your **Account ID** from the Cloudflare dashboard (Workers & Pages overview, right side).
+3. In this GitHub repo: Settings → Secrets and variables → Actions → add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+4. Create the project once with `make deploy`, or let the first workflow run create it.
+
+### Without any tooling
+
+Run `make build`, then in Cloudflare go to Workers & Pages → Create → Pages → Upload assets and drag in `dist/`.
+
+### Changing the address
+
+- **Custom domain:** in the Pages project, open Custom domains and add your domain. You can do this at any time without redeploying.
+- **Different `pages.dev` name:** a project can't be renamed. Change `name` in `wrangler.toml`, run `make deploy` to create the new project, then delete the old one in the dashboard.
 
 ## License
 
