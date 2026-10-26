@@ -1,0 +1,1090 @@
+<title>System Design Playbook</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: whiteboard study guide — sticky progress rail on the left, one reading column of collapsible topic cards on the right. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #5a6475;
+  --line: #d9dee7;
+  --accent: #0d7a6b;      /* marker teal */
+  --accent-soft: #dff1ec;
+  --senior: #a3305f;      /* senior-signal magenta */
+  --senior-soft: #f7e4ec;
+  --warn: #9a5b00;
+  --warn-soft: #fbefd9;
+  --code-bg: #eef1f6;
+  --f-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+    --accent: #4fc9b4; --accent-soft: #15332f; --senior: #ef86b0; --senior-soft: #3a1d2a;
+    --warn: #f0b45a; --warn-soft: #3a2c14; --code-bg: #212938; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+  --accent: #4fc9b4; --accent-soft: #15332f; --senior: #ef86b0; --senior-soft: #3a1d2a;
+  --warn: #f0b45a; --warn-soft: #3a2c14; --code-bg: #212938; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.6 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.shell { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 48px; padding-block: 40px 80px; }
+@media (max-width: 880px) { .shell { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 24px 60px; } }
+
+/* Rail */
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; display: grid; gap: 20px; }
+@media (max-width: 880px) { .rail { position: static; } }
+.brand { font: 800 22px/1.1 var(--f-display); letter-spacing: -0.01em; }
+.brand small { display: block; font: 500 12px/1.4 var(--f-mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 6px; }
+.overall { display: grid; gap: 6px; }
+.overall .meter { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.overall .meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.overall span { font: 500 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.toc { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc a { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 6px; text-decoration: none; color: var(--ink); font-weight: 500; }
+.toc a:hover { background: var(--surface); }
+.toc a em { font: normal 500 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.toc a.done em { color: var(--accent); }
+@media (max-width: 880px) { .toc { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } }
+.search { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
+.rail-note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.reset { justify-self: start; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 10px; font: 500 12px var(--f-mono); cursor: pointer; }
+.reset.armed { color: var(--senior); border-color: var(--senior); }
+
+/* Main */
+main { min-width: 0; display: grid; gap: 64px; }
+header.hero { display: grid; gap: 14px; }
+.eyebrow { font: 500 12px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 800 clamp(32px, 5vw, 48px)/1.05 var(--f-display); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h2 { font: 800 30px/1.15 var(--f-display); letter-spacing: -0.015em; margin: 0; text-wrap: balance; }
+h3 { font: 600 19px/1.3 var(--f-display); margin: 0; }
+h4 { font: 500 11.5px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 18px 0 6px; }
+p { margin: 0 0 10px; max-width: 68ch; }
+.lede { font-size: 17px; color: var(--muted); max-width: 62ch; }
+section { display: grid; gap: 18px; scroll-margin-top: 20px; }
+.sec-head { display: grid; gap: 8px; }
+.sec-head p { color: var(--muted); }
+ul, ol { margin: 0 0 10px; padding-left: 20px; }
+li { margin: 3px 0; max-width: 68ch; }
+code, kbd { font: 13px var(--f-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { font: 12.5px/1.55 var(--f-mono); background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0 12px; }
+pre code { background: none; padding: 0; }
+strong { font-weight: 600; }
+
+/* Framework timeline */
+.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); max-width: none; margin: 0; }
+.steps li::before { content: counter(s); font: 800 30px/1 var(--f-display); color: var(--accent); }
+.steps .min { font: 500 12px var(--f-mono); color: var(--muted); margin-left: 8px; }
+.timebar { display: flex; height: 30px; border-radius: 6px; overflow: hidden; font: 500 11px var(--f-mono); }
+.timebar div { display: flex; align-items: center; justify-content: center; color: var(--surface); white-space: nowrap; overflow: hidden; padding: 0 4px; }
+.tb1 { background: var(--accent); } .tb2 { background: color-mix(in srgb, var(--accent) 75%, var(--ink)); } .tb3 { background: color-mix(in srgb, var(--accent) 55%, var(--ink)); }
+.tb4 { background: color-mix(in srgb, var(--accent) 40%, var(--ink)); } .tb5 { background: var(--senior); } .tb6 { background: var(--muted); }
+
+.callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.callout { border-radius: 10px; padding: 16px 18px; min-width: 0; }
+.callout h3 { font-size: 16px; margin-bottom: 8px; }
+.callout ul { margin: 0; }
+.callout.good { background: var(--accent-soft); }
+.callout.good h3 { color: var(--accent); }
+.callout.bad { background: var(--warn-soft); }
+.callout.bad h3 { color: var(--warn); }
+.callout.sr { background: var(--senior-soft); }
+.callout.sr h3 { color: var(--senior); }
+
+/* Topic cards */
+.topics { display: grid; gap: 10px; }
+details.topic { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+details.topic[open] { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+details.topic > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
+details.topic > summary::-webkit-details-marker { display: none; }
+summary .t-title { font: 600 16px/1.3 var(--f-display); flex: 1; min-width: 0; }
+summary .t-sub { display: block; font: 400 13px/1.4 var(--f-body); color: var(--muted); margin-top: 2px; }
+summary .chev { width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .2s; flex: none; margin-right: 4px; }
+details[open] > summary .chev { transform: rotate(45deg); }
+.chk { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; border: 2px solid var(--line); border-radius: 5px; flex: none; cursor: pointer; display: grid; place-items: center; background: var(--surface); margin: 0; }
+.chk:checked { background: var(--accent); border-color: var(--accent); }
+.chk:checked::after { content: ""; width: 5px; height: 10px; border: solid var(--surface); border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+details.topic.is-done summary .t-title { color: var(--muted); }
+.topic .body { padding: 2px 18px 16px 50px; min-width: 0; }
+@media (max-width: 560px) { .topic .body { padding-left: 18px; } }
+.tag { font: 500 11px var(--f-mono); padding: 2px 7px; border-radius: 99px; background: var(--code-bg); color: var(--muted); white-space: nowrap; }
+.tag.hot { background: var(--senior-soft); color: var(--senior); }
+.tag.core { background: var(--accent-soft); color: var(--accent); }
+.sr-note { background: var(--senior-soft); border-radius: 8px; padding: 10px 14px; margin-top: 12px; font-size: 14px; }
+.sr-note b { color: var(--senior); font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+.play-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 4px 0 8px; padding: 12px 16px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); text-decoration: none; font-size: 14px; max-width: 68ch; }
+.play-link strong { display: block; color: var(--accent); font: 600 15px/1.3 var(--f-display); margin-bottom: 2px; }
+.play-link > span:last-child { font-size: 20px; color: var(--accent); transition: transform .2s; }
+.play-link:hover > span:last-child { transform: translateX(4px); }
+.flow { font: 12.5px/1.6 var(--f-mono); background: var(--code-bg); padding: 10px 14px; border-radius: 8px; overflow-x: auto; white-space: pre; margin: 6px 0 10px; }
+
+/* Tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.topic .tbl { margin: 6px 0 12px; }
+
+/* Latency bars */
+.lat { display: grid; gap: 6px; }
+.lat-row { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr) 84px; gap: 12px; align-items: center; font-size: 14px; }
+.lat-row .bar { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.lat-row .bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.lat-row .v { font: 500 13px var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .lat-row { grid-template-columns: minmax(0, 1fr) 76px; } .lat-row .bar { grid-column: 1 / -1; order: 3; } }
+.scale-note { font-size: 12.5px; color: var(--muted); }
+
+/* Calculator */
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+@media (max-width: 700px) { .calc { grid-template-columns: minmax(0, 1fr); } }
+.calc form { display: grid; gap: 12px; }
+.calc label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.calc input, .calc select { font: 500 14px var(--f-mono); padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 100%; }
+.calc .out { display: grid; gap: 0; align-content: start; }
+.calc .out div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+.calc .out div:last-child { border-bottom: 0; }
+.calc .out b { font: 500 15px var(--f-mono); font-variant-numeric: tabular-nums; color: var(--accent); text-align: right; }
+.calc .verdict { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 13.5px; }
+
+/* Diagram */
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.diagram svg { display: block; min-width: 680px; width: 100%; height: auto; }
+.diagram .box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.diagram .box.acc { fill: var(--accent-soft); stroke: var(--accent); }
+.diagram .box.sr { fill: var(--senior-soft); stroke: var(--senior); }
+.diagram text { fill: var(--ink); font: 500 12.5px var(--f-body); }
+.diagram text.s { fill: var(--muted); font: 400 10.5px var(--f-mono); }
+.diagram .ar { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+.diagram .ar.dash { stroke-dasharray: 4 4; }
+.diagram #arr path { fill: var(--muted); }
+
+.filter-empty { color: var(--muted); font-style: italic; }
+.prob-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+</style>
+
+<div class="shell">
+  <aside class="rail" aria-label="Progress and contents">
+    <div class="brand">System Design Playbook<small>Concepts · numbers · patterns</small></div>
+    <div class="overall">
+      <div class="meter" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="meterFill"></i></div>
+      <span id="overallText">0 of 0 topics checked off</span>
+    </div>
+    <input id="search" class="search" type="search" placeholder="Filter topics (e.g. kafka, cache)" aria-label="Filter topics">
+    <ul class="toc" id="toc">
+      <li><a href="#framework">Design process <em data-count="framework"></em></a></li>
+      <li><a href="#numbers">Numbers &amp; estimation <em data-count="numbers"></em></a></li>
+      <li><a href="#fundamentals">Fundamentals <em data-count="fundamentals"></em></a></li>
+      <li><a href="#problems">Classic problems <em data-count="problems"></em></a></li>
+      <li><a href="#ai">AI-era systems <em data-count="ai"></em></a></li>
+      <li><a href="#trends">Current trends <em data-count="trends"></em></a></li>
+      <li><a href="#resources">Further reading <em data-count="resources"></em></a></li>    </ul>
+    <p class="rail-note">Tick a box when you can explain the topic out loud in two minutes without notes. Progress is saved in this browser only.</p>
+    <button class="reset" id="reset" type="button">Reset progress</button>
+  </aside>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Updated Oct 2026</div>
+      <h1>Design anything, and defend every box you draw</h1>
+      <p class="lede">A step-by-step design process, the numbers worth knowing by heart, the building blocks, 18 classic problems with sketch answers, and AI-era systems (RAG, LLM serving, agents).</p>
+    </header>
+
+    <!-- FRAMEWORK -->
+    <section id="framework" data-sec="framework">
+      <div class="sec-head">
+        <div class="eyebrow">Part 1</div>
+        <h2>Design process</h2>
+        <p>Use the same six steps for every design, so nothing important gets skipped and every decision has a reason behind it.</p>
+      </div>
+      <ol class="steps">
+        <li><div><h3>Clarify requirements</h3>
+          <p><strong>Functional:</strong> list 3–5 core features, then pick the 2–3 that matter most.</p>
+          <p><strong>Non-functional:</strong> scale (DAU, data size), latency targets, availability vs. consistency, durability, read-heavy or write-heavy, global or single region.</p>
+          <p>State what is out of scope (auth, billing, analytics) so the design stays focused.</p></div></li>
+        <li><div><h3>Back-of-envelope estimates</h3>
+          <p>Compute only numbers that change the design: peak QPS, storage over 5 years, bandwidth. Then state the consequence: "40K reads/s means a cache is mandatory; 2 TB/year fits in one sharded Postgres cluster."</p></div></li>
+        <li><div><h3>API and data model</h3>
+          <p>Write 3–5 endpoint signatures (<code>POST /v1/urls {longUrl} → {shortCode}</code>). List the entities and the main access patterns, then choose storage from the access patterns, not from habit.</p></div></li>
+        <li><div><h3>High-level design</h3>
+          <p>Draw the simplest design that satisfies every functional requirement. Walk one request through it end to end for each core feature. Don't optimize yet.</p></div></li>
+        <li><div><h3>Deep dives</h3>
+          <p>Pick 2–3 hard parts: the hot path at scale, the consistency-sensitive write, a failure mode. List the options, compare them, choose one and write down why.</p></div></li>
+        <li><div><h3>Review</h3>
+          <p>Recap the trade-offs you made, name the bottleneck that breaks first at 10× scale, and mention monitoring (what you'd alert on) and how the design evolves.</p></div></li>
+      </ol>
+      <div class="callouts">
+        <div class="callout sr"><h3>Good habits</h3><ul>
+          <li>Every choice comes with a trade-off and a number.</li>
+          <li>Failure modes are considered up front, not after an outage.</li>
+          <li>Boring, proven tech by default, known deeply (Postgres, Kafka, Redis, DynamoDB).</li>
+          <li>Simplify: "At 200 QPS one Postgres primary is enough."</li>
+        </ul></div>
+        <div class="callout bad"><h3>Common mistakes</h3><ul>
+          <li>Drawing boxes before agreeing on requirements.</li>
+          <li>Naming tech without saying why.</li>
+          <li>Microservices, Kafka and sharding for a 100 QPS app.</li>
+          <li>A single point of failure nobody mentions.</li>
+        </ul></div>
+      </div>
+      <div class="topics">
+        <details class="topic" data-id="fw-questions"><summary><span class="t-title">Clarifying questions to have ready<span class="t-sub">A reusable list so step 1 never stalls</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Who are the users and how many? DAU, peak concurrency, geographic spread.</li>
+            <li>What is the read:write ratio? What is the size of a typical object?</li>
+            <li>What latency matters, and for which operation? (p99 &lt; 200 ms for reads?)</li>
+            <li>Is it acceptable to show stale data? For how long? Can we ever lose a write?</li>
+            <li>Mobile, web, or both? Do we need offline support or real-time updates?</li>
+            <li>Is ordering important (chat messages, ledger entries)?</li>
+            <li>Any compliance limits (PII, data residency, retention)?</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="fw-tradeoffs"><summary><span class="t-title">The trade-off vocabulary<span class="t-sub">Pairs that come up in almost every design</span></span><span class="chev"></span></summary><div class="body">
+          <div class="tbl"><table>
+            <tr><th>Trade-off</th><th>Pick the left when…</th></tr>
+            <tr><td>Consistency vs availability</td><td>Money, inventory, auth. Wrong data costs more than downtime.</td></tr>
+            <tr><td>Latency vs throughput</td><td>User-facing request paths. Batch and buffer for background work.</td></tr>
+            <tr><td>Push vs pull</td><td>Few consumers, low fan-out, real-time needs.</td></tr>
+            <tr><td>Normalize vs denormalize</td><td>Write-heavy data with many relationships; denormalize for hot reads.</td></tr>
+            <tr><td>Sync vs async</td><td>The caller needs the result now. Otherwise put a queue in between.</td></tr>
+            <tr><td>Strong vs eventual</td><td>Read-after-write is visible to the user (profile edit, payment status).</td></tr>
+            <tr><td>Build vs buy (managed)</td><td>The component is your core differentiator. Otherwise default to managed services.</td></tr>
+          </table></div>
+        </div></details>
+      </div>
+    </section>
+
+    <!-- NUMBERS -->
+    <section id="numbers" data-sec="numbers">
+      <div class="sec-head">
+        <div class="eyebrow">Part 2</div>
+        <h2>Numbers &amp; estimation</h2>
+        <p>Use orders of magnitude, not exact figures. What matters is that the reasoning is sound and that you act on the result.</p>
+      </div>
+      <h3>Latency, on a log scale</h3>
+      <div class="lat" id="lat"></div>
+      <p class="scale-note">Bar length is log₁₀ of the latency in nanoseconds. Values are rough modern figures; memorize the ratios, not the digits.</p>
+
+      <div class="topics">
+        <details class="topic" data-id="num-cheats" open><summary><span class="t-title">Conversion shortcuts<span class="t-sub">Do the math in your head in seconds</span></span><span class="chev"></span></summary><div class="body">
+          <div class="tbl"><table>
+            <tr><th>Fact</th><th>Value</th></tr>
+            <tr><td>Seconds per day</td><td class="num">86,400 ≈ 10⁵</td></tr>
+            <tr><td>1 M requests/day</td><td class="num">≈ 12 QPS</td></tr>
+            <tr><td>100 M requests/day</td><td class="num">≈ 1,200 QPS</td></tr>
+            <tr><td>1 B requests/day</td><td class="num">≈ 12,000 QPS</td></tr>
+            <tr><td>Peak vs average</td><td class="num">2–3× (up to 10× for events)</td></tr>
+            <tr><td>2¹⁰ / 2²⁰ / 2³⁰ / 2⁴⁰ / 2⁵⁰</td><td class="num">KB / MB / GB / TB / PB</td></tr>
+            <tr><td>UUID / bigint / timestamp</td><td class="num">16 B / 8 B / 8 B</td></tr>
+            <tr><td>Short text post with metadata</td><td class="num">~1 KB</td></tr>
+            <tr><td>Compressed photo</td><td class="num">200 KB – 2 MB</td></tr>
+            <tr><td>1 min of 1080p video (~5 Mbps)</td><td class="num">~40 MB</td></tr>
+          </table></div>
+        </div></details>
+        <details class="topic" data-id="num-capacity"><summary><span class="t-title">Single-node capacity rules of thumb<span class="t-sub">When do you actually need to scale out?</span></span><span class="chev"></span></summary><div class="body">
+          <div class="tbl"><table>
+            <tr><th>Component</th><th>Roughly handles</th></tr>
+            <tr><td>Stateless app server</td><td class="num">1K–10K RPS</td></tr>
+            <tr><td>Postgres / MySQL primary</td><td class="num">5K–20K simple writes/s, more reads; ~10 TB comfortable</td></tr>
+            <tr><td>Redis node</td><td class="num">100K+ ops/s, memory-bound (~100 GB)</td></tr>
+            <tr><td>Kafka broker</td><td class="num">100s of MB/s; cluster: millions msgs/s</td></tr>
+            <tr><td>Cassandra / DynamoDB</td><td class="num">Scales linearly; ~10K ops/s per node</td></tr>
+            <tr><td>WebSocket server</td><td class="num">50K–1M idle connections (tuned)</td></tr>
+            <tr><td>NIC</td><td class="num">10–25 Gbps ≈ 1–3 GB/s</td></tr>
+          </table></div>
+          <p>Make the conclusion explicit: "10K writes/s is near one Postgres primary's limit, so I'll shard by user_id or pick a store that partitions natively."</p>
+        </div></details>
+        <details class="topic" data-id="num-avail"><summary><span class="t-title">Availability nines<span class="t-sub">Downtime budgets and why they compound</span></span><span class="chev"></span></summary><div class="body">
+          <div class="tbl"><table>
+            <tr><th>SLA</th><th>Per year</th><th>Per month</th></tr>
+            <tr><td class="num">99%</td><td class="num">3.65 days</td><td class="num">7.3 h</td></tr>
+            <tr><td class="num">99.9%</td><td class="num">8.77 h</td><td class="num">43.8 min</td></tr>
+            <tr><td class="num">99.99%</td><td class="num">52.6 min</td><td class="num">4.38 min</td></tr>
+            <tr><td class="num">99.999%</td><td class="num">5.26 min</td><td class="num">26 s</td></tr>
+          </table></div>
+          <p>Components in series multiply: three 99.9% services in a chain give about 99.7%. Redundant copies in parallel: 1 − (1 − a)ⁿ.</p>
+        </div></details>
+      </div>
+
+      <h3>Back-of-envelope calculator</h3>
+      <div class="calc">
+        <form id="calcForm" autocomplete="off">
+          <label for="c-dau">Daily active users<input id="c-dau" type="number" min="0" value="100000000"></label>
+          <label for="c-writes">Writes per user per day<input id="c-writes" type="number" min="0" step="0.1" value="2"></label>
+          <label for="c-ratio">Reads per write<input id="c-ratio" type="number" min="0" value="100"></label>
+          <label for="c-size">Bytes per write<input id="c-size" type="number" min="0" value="1000"></label>
+          <label for="c-years">Retention (years)<input id="c-years" type="number" min="0" step="0.5" value="5"></label>
+          <label for="c-rep">Replication factor<select id="c-rep"><option value="1">1×</option><option value="3" selected>3×</option></select></label>
+          <label for="c-peak">Peak multiplier<input id="c-peak" type="number" min="1" step="0.5" value="3"></label>
+        </form>
+        <div>
+          <div class="out" id="calcOut"></div>
+          <div class="verdict" id="calcVerdict"></div>
+        </div>
+      </div>
+      <p class="scale-note">Example values: a Twitter-like service with 100 M DAU posting twice a day.</p>
+    </section>
+
+    <!-- FUNDAMENTALS -->
+    <section id="fundamentals" data-sec="fundamentals">
+      <div class="sec-head">
+        <div class="eyebrow">Part 3</div>
+        <h2>Fundamentals</h2>
+        <p>The building blocks every design is made of. For each one, know what it is, when to use it, and how it fails.</p>
+      </div>
+      <div class="diagram" role="img" aria-label="Reference architecture: clients go through DNS and CDN to a load balancer, then API services, which use cache, databases, a message queue feeding workers, object storage and a search index.">
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
+          <rect class="box" x="10" y="120" width="90" height="50" rx="8"/><text x="55" y="149" text-anchor="middle">Clients</text>
+          <rect class="box" x="130" y="60" width="100" height="44" rx="8"/><text x="180" y="86" text-anchor="middle">DNS / GSLB</text>
+          <rect class="box" x="130" y="186" width="100" height="44" rx="8"/><text x="180" y="212" text-anchor="middle">CDN</text>
+          <rect class="box acc" x="260" y="120" width="100" height="50" rx="8"/><text x="310" y="142" text-anchor="middle">Load balancer</text><text class="s" x="310" y="158" text-anchor="middle">L7 · TLS</text>
+          <rect class="box acc" x="390" y="110" width="110" height="70" rx="8"/><text x="445" y="140" text-anchor="middle">API services</text><text class="s" x="445" y="158" text-anchor="middle">stateless · N copies</text>
+          <rect class="box" x="540" y="14" width="100" height="44" rx="8"/><text x="590" y="40" text-anchor="middle">Cache</text>
+          <rect class="box" x="540" y="76" width="100" height="56" rx="8"/><text x="590" y="100" text-anchor="middle">Database</text><text class="s" x="590" y="117" text-anchor="middle">primary + replicas</text>
+          <rect class="box sr" x="540" y="150" width="100" height="44" rx="8"/><text x="590" y="176" text-anchor="middle">Queue / log</text>
+          <rect class="box" x="540" y="214" width="100" height="44" rx="8"/><text x="590" y="240" text-anchor="middle">Object store</text>
+          <rect class="box sr" x="660" y="150" width="90" height="44" rx="8"/><text x="705" y="176" text-anchor="middle">Workers</text>
+          <rect class="box" x="660" y="76" width="90" height="44" rx="8"/><text x="705" y="102" text-anchor="middle">Search</text>
+          <path class="ar dash" d="M60 120 V82 H128"/>
+          <path class="ar" d="M100 145 H258"/>
+          <path class="ar dash" d="M60 170 V208 H128"/>
+          <path class="ar dash" d="M180 230 V270 H590 V260"/>
+          <path class="ar" d="M360 145 H388"/>
+          <path class="ar" d="M500 125 L538 40"/>
+          <path class="ar" d="M500 140 L538 104"/>
+          <path class="ar" d="M500 158 L538 172"/>
+          <path class="ar" d="M500 170 L538 230"/>
+          <path class="ar" d="M640 172 H658"/>
+          <path class="ar" d="M705 150 V122"/>
+        </svg>
+      </div>
+      <p class="scale-note">The default skeleton. Most designs are this picture plus two or three problem-specific components. Dashed lines are static or out-of-band paths.</p>
+
+      <div class="topics">
+        <details class="topic" data-id="f-scaling"><summary><span class="t-title">Scaling and statelessness<span class="t-sub">Vertical vs horizontal, where state lives</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Vertical</strong> (bigger box): simple and surprisingly far-reaching, but has a ceiling and is a single point of failure.</li>
+            <li><strong>Horizontal</strong> (more boxes): requires stateless services. Move sessions to Redis or signed tokens, and files to object storage.</li>
+            <li>Autoscale on a leading signal (CPU, queue depth, concurrent requests) with cooldowns to avoid flapping.</li>
+            <li>The stateful tier (database, cache, queue) is always the hard part. Say where state lives and how it scales.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-lb"><summary><span class="t-title">Load balancing<span class="t-sub">L4 vs L7, algorithms, health checks</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>L4</strong> routes on IP/port (fast, protocol-agnostic). <strong>L7</strong> routes on HTTP path, headers or cookies, terminates TLS, and can retry.</li>
+            <li>Algorithms: round robin, weighted, least connections, least response time, consistent hashing (for cache affinity or sticky shards).</li>
+            <li>Active health checks plus outlier ejection. Run the LB itself redundantly (active-passive with a floating IP, or managed).</li>
+            <li>Global: DNS-based or anycast GSLB routes users to the nearest healthy region.</li>
+            <li>Sticky sessions hurt even load distribution; prefer stateless services.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-cache"><summary><span class="t-title">Caching<span class="t-sub">Patterns, eviction, stampedes, invalidation</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <h4>Where</h4>
+          <p>Browser → CDN → API gateway → in-process (local) → distributed (Redis/Memcached) → database buffer pool.</p>
+          <h4>Write patterns</h4>
+          <div class="tbl"><table>
+            <tr><th>Pattern</th><th>How</th><th>Use when</th></tr>
+            <tr><td>Cache-aside</td><td>App reads cache; on miss reads DB and fills cache</td><td>Default choice; tolerant of cache failure</td></tr>
+            <tr><td>Read-through</td><td>Cache library loads from DB on miss</td><td>Same as above, less app code</td></tr>
+            <tr><td>Write-through</td><td>Write cache and DB synchronously</td><td>Read-after-write must hit cache</td></tr>
+            <tr><td>Write-behind</td><td>Write cache, flush to DB asynchronously</td><td>Write-heavy counters; risk of loss</td></tr>
+            <tr><td>Write-around</td><td>Write DB only; cache fills on read</td><td>Data rarely re-read soon after write</td></tr>
+          </table></div>
+          <h4>Eviction</h4>
+          <p>LRU (recency), LFU (frequency, better for skewed popularity), TTL (bounded staleness). Redis uses approximate LRU/LFU by sampling.</p>
+          <h4>Failure modes</h4>
+          <ul>
+            <li><strong>Stampede</strong> (many misses for one hot key): request coalescing / single-flight, locks, jittered TTLs, probabilistic early refresh.</li>
+            <li><strong>Hot key</strong>: replicate the key across nodes with a suffix (<code>key#1..n</code>), or add a small local cache.</li>
+            <li><strong>Invalidation</strong>: delete on write (not update) to avoid races; CDC-driven invalidation for multiple writers.</li>
+            <li><strong>Penetration</strong> (lookups of nonexistent keys): cache negatives, or front the store with a Bloom filter.</li>
+          </ul>
+          <div class="sr-note"><b>Key insight</b>State the hit ratio you expect and what happens to the database when the cache is cold or down.</div>
+        </div></details>
+        <details class="topic" data-id="f-db"><summary><span class="t-title">Choosing a database<span class="t-sub">SQL vs NoSQL, B-tree vs LSM</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <div class="tbl"><table>
+            <tr><th>Type</th><th>Examples</th><th>Good at</th></tr>
+            <tr><td>Relational</td><td>Postgres, MySQL, Aurora, Spanner</td><td>Transactions, joins, constraints, flexible queries</td></tr>
+            <tr><td>Key-value</td><td>Redis, DynamoDB</td><td>Single-key lookups at huge scale</td></tr>
+            <tr><td>Wide-column</td><td>Cassandra, ScyllaDB, Bigtable</td><td>Write-heavy time-ordered data, partition + sort key</td></tr>
+            <tr><td>Document</td><td>MongoDB, Firestore</td><td>Nested, schema-flexible aggregates</td></tr>
+            <tr><td>Search</td><td>Elasticsearch, OpenSearch</td><td>Full text, faceting, relevance</td></tr>
+            <tr><td>Time-series</td><td>Prometheus, InfluxDB, TimescaleDB</td><td>Metrics, downsampling, retention</td></tr>
+            <tr><td>Graph</td><td>Neo4j</td><td>Multi-hop relationship queries</td></tr>
+            <tr><td>Vector</td><td>pgvector, Pinecone, Milvus</td><td>Nearest-neighbor over embeddings</td></tr>
+          </table></div>
+          <ul>
+            <li><strong>B-tree</strong> (Postgres, MySQL): in-place updates, fast reads and range scans.</li>
+            <li><strong>LSM tree</strong> (Cassandra, RocksDB): append to memtable and SSTables, then compact. Fast writes; reads may check several files (Bloom filters help).</li>
+            <li>Indexes speed up reads and slow down writes. Composite index column order follows the query's equality columns first, then range.</li>
+            <li>Isolation levels: read committed (default in Postgres), repeatable read / snapshot, serializable. Know the anomalies: lost update, write skew.</li>
+          </ul>
+          <div class="sr-note"><b>Key insight</b>"Postgres until proven otherwise" is a strong default. Justify any NoSQL choice with an access pattern or a scale number.</div>
+        </div></details>
+        <details class="topic" data-id="f-repl"><summary><span class="t-title">Replication<span class="t-sub">Leader-follower, multi-leader, leaderless quorums</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Single leader</strong>: writes go to the primary, reads scale on replicas. Async replication means replica lag and possible loss of recent writes on failover.</li>
+            <li><strong>Multi-leader</strong>: one writable leader per region. Needs conflict resolution (last-writer-wins, CRDTs, app merge).</li>
+            <li><strong>Leaderless</strong> (Dynamo, Cassandra): write to W of N replicas, read from R. If R + W &gt; N, a read overlaps the latest write. Read repair and hinted handoff fix divergence.</li>
+            <li>Read-your-writes under lag: route a user's reads to the primary for a few seconds after they write, or track the replication position (LSN).</li>
+            <li>Failover dangers: split brain (two primaries). Use consensus-based election and fencing.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-shard"><summary><span class="t-title">Partitioning and sharding<span class="t-sub">Shard keys, consistent hashing, hot spots</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Range</strong> partitioning keeps scans efficient but creates hot spots on sequential keys (timestamps).</li>
+            <li><strong>Hash</strong> partitioning spreads load evenly but loses range queries.</li>
+            <li><strong>Consistent hashing</strong>: keys and nodes on a ring; adding a node moves only ~1/N of keys. Virtual nodes smooth out the distribution.</li>
+            <li>Pick the shard key from the dominant query: <code>user_id</code> for user-scoped data, <code>conversation_id</code> for chat.</li>
+            <li>Celebrity/hot partitions: split the key with a suffix, or handle hot entities on a separate path.</li>
+            <li>Cross-shard queries need scatter-gather or a global secondary index (updated asynchronously).</li>
+            <li>Resharding: double the shard count and move half the data, or use many logical shards mapped to fewer physical nodes from day one.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-cap"><summary><span class="t-title">CAP, PACELC and consistency models<span class="t-sub">What "consistent" actually means</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>CAP</strong>: during a network Partition you choose Consistency or Availability. Partitions will happen, so the real choice is CP vs AP.</li>
+            <li><strong>PACELC</strong>: Else (no partition), you trade Latency against Consistency. This is the trade-off you make every day.</li>
+          </ul>
+          <div class="tbl"><table>
+            <tr><th>Model</th><th>Guarantee</th><th>Example need</th></tr>
+            <tr><td>Linearizable</td><td>Behaves like one copy; reads see the latest write</td><td>Locks, leader election, balances</td></tr>
+            <tr><td>Sequential</td><td>All see the same order, not necessarily real-time</td><td>Replicated logs</td></tr>
+            <tr><td>Causal</td><td>Cause before effect (reply after message)</td><td>Comments, chat</td></tr>
+            <tr><td>Read-your-writes</td><td>You see your own updates</td><td>Profile edits</td></tr>
+            <tr><td>Monotonic reads</td><td>Never go back in time</td><td>Feeds, timelines</td></tr>
+            <tr><td>Eventual</td><td>Converges if writes stop</td><td>Like counts, view counts</td></tr>
+          </table></div>
+        </div></details>
+        <details class="topic" data-id="f-mq"><summary><span class="t-title">Message queues and event streams<span class="t-sub">Queue vs log, delivery semantics, outbox</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Queue</strong> (SQS, RabbitMQ): a message goes to one consumer and is deleted on ack. Good for task distribution.</li>
+            <li><strong>Log</strong> (Kafka, Kinesis, Pulsar): an append-only, partitioned, retained log. Many consumer groups read independently and can replay.</li>
+            <li>Ordering is only guaranteed within a partition. Choose the partition key to group events that must stay ordered (<code>order_id</code>).</li>
+            <li><strong>Delivery</strong>: at-most-once (may lose), at-least-once (may duplicate, the usual default), exactly-once = at-least-once + idempotent consumer or transactional processing.</li>
+            <li>Idempotency: dedupe table keyed by message ID, or naturally idempotent writes (upsert, set-to-value).</li>
+            <li>Failure handling: retries with backoff, then a dead-letter queue. Watch consumer lag; backpressure by bounding queue size.</li>
+            <li><strong>Transactional outbox</strong>: write the business row and an outbox row in one DB transaction; a relay (or CDC like Debezium) publishes it. Solves "DB committed but event lost".</li>
+          </ul>
+          <div class="sr-note"><b>Key insight</b>Explain what happens if the consumer crashes after processing but before committing its offset. Answer: it reprocesses, so the handler must be idempotent.</div>
+        </div></details>
+        <details class="topic" data-id="f-txn"><summary><span class="t-title">Distributed transactions<span class="t-sub">2PC, sagas, idempotency keys</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>2PC</strong>: coordinator asks all participants to prepare, then commit. Strong but blocking if the coordinator dies; rare across services.</li>
+            <li><strong>Saga</strong>: a sequence of local transactions, each with a compensating action (refund, release seat). <em>Choreography</em> uses events; <em>orchestration</em> uses a central workflow (Temporal, Step Functions). Orchestration is easier to reason about.</li>
+            <li>Sagas give eventual consistency. Design visible intermediate states (PENDING, RESERVED).</li>
+            <li><strong>Idempotency key</strong>: the client sends a unique key per logical operation; the server stores key → result and returns the stored result on retry.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-consensus"><summary><span class="t-title">Consensus, leases and locks<span class="t-sub">Raft, etcd/ZooKeeper, fencing tokens</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Raft / Paxos</strong>: a majority (quorum) agrees on a replicated log. Tolerates f failures with 2f + 1 nodes.</li>
+            <li>You rarely implement it. Use etcd, ZooKeeper or Consul for leader election, config and service discovery.</li>
+            <li><strong>Leases</strong>: a lock with a TTL that the holder must renew. A paused process (GC, network) can lose its lease without knowing.</li>
+            <li><strong>Fencing tokens</strong>: a monotonically increasing number issued with each lock; storage rejects writes with an older token. This makes distributed locks safe.</li>
+            <li>A Redis lock (<code>SET key val NX PX 30000</code>) is fine for efficiency (avoid duplicate work), not for correctness.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-ids"><summary><span class="t-title">Unique ID generation<span class="t-sub">UUIDv4, UUIDv7, Snowflake</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>UUIDv4</strong>: random, no coordination, but poor B-tree locality (random inserts).</li>
+            <li><strong>UUIDv7</strong>: timestamp-prefixed, sortable, index-friendly. Today's sensible default.</li>
+            <li><strong>Snowflake</strong> (64-bit): 1 sign + 41 bits ms timestamp (~69 years) + 10 bits machine ID + 12 bits sequence (4,096 IDs/ms/machine). Watch for clock skew going backwards.</li>
+            <li><strong>Ticket server / DB sequence</strong>: simple, but a bottleneck. Hand out ranges (blocks of 1,000) to reduce calls.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-api"><summary><span class="t-title">API design and real-time transport<span class="t-sub">REST, gRPC, GraphQL, WebSocket, SSE</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>REST</strong>: public APIs, cacheable. <strong>gRPC</strong>: internal service-to-service, typed, streaming. <strong>GraphQL</strong>: client-shaped reads across many entities; watch N+1 queries.</li>
+            <li>Pagination: cursor-based (<code>?after=opaque</code>) is stable under inserts and fast; offset is simple but slow and shifts.</li>
+            <li>Version in the path or header; make writes idempotent; return 429 with <code>Retry-After</code>.</li>
+          </ul>
+          <div class="tbl"><table>
+            <tr><th>Transport</th><th>Direction</th><th>Use for</th></tr>
+            <tr><td>Short polling</td><td>Client pulls</td><td>Rare updates, simplest</td></tr>
+            <tr><td>Long polling</td><td>Client pulls, server holds</td><td>Fallback where sockets are blocked</td></tr>
+            <tr><td>SSE</td><td>Server → client</td><td>Notifications, LLM token streaming</td></tr>
+            <tr><td>WebSocket</td><td>Bidirectional</td><td>Chat, collaboration, games</td></tr>
+            <tr><td>Webhooks</td><td>Server → server</td><td>Third-party callbacks</td></tr>
+          </table></div>
+        </div></details>
+        <details class="topic" data-id="f-rate"><summary><span class="t-title">Rate limiting algorithms<span class="t-sub">Token bucket and friends</span></span><span class="chev"></span></summary><div class="body">
+          <div class="tbl"><table>
+            <tr><th>Algorithm</th><th>Behavior</th><th>Trade-off</th></tr>
+            <tr><td>Token bucket</td><td>Refill r tokens/s up to capacity b</td><td>Allows bursts; most common</td></tr>
+            <tr><td>Leaky bucket</td><td>Queue drains at a fixed rate</td><td>Smooth output, adds latency</td></tr>
+            <tr><td>Fixed window</td><td>Counter per minute</td><td>Cheap; 2× burst at window edges</td></tr>
+            <tr><td>Sliding log</td><td>Store every timestamp</td><td>Exact; memory-heavy</td></tr>
+            <tr><td>Sliding window counter</td><td>Weighted blend of current and previous window</td><td>Accurate enough, cheap</td></tr>
+          </table></div>
+        </div></details>
+        <details class="topic" data-id="f-storage"><summary><span class="t-title">Blob storage and CDN<span class="t-sub">Pre-signed URLs, multipart, edge caching</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Never stream large files through your API servers. Issue a <strong>pre-signed URL</strong> so the client uploads directly to S3/GCS.</li>
+            <li>Multipart / resumable uploads for big files; process with an event on upload completion (thumbnailing, transcoding).</li>
+            <li>CDN for static and media content: pull-through caching, cache keys, TTLs, invalidation by versioned URLs (<code>app.3f9c.js</code>).</li>
+            <li>Object stores are cheap and 11-nines durable, with higher latency (tens of ms). Use storage tiers for cold data.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-search"><summary><span class="t-title">Search and geospatial indexes<span class="t-sub">Inverted index, geohash, quadtree, H3</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Inverted index</strong>: term → list of document IDs. Tokenize, normalize, stem; rank with BM25 plus business signals.</li>
+            <li>Keep the search index in sync from the source of truth via CDC or events. Accept seconds of lag.</li>
+            <li><strong>Geohash</strong>: encodes lat/long into a string prefix; nearby points share prefixes. Query the cell plus its 8 neighbors.</li>
+            <li><strong>Quadtree</strong>: splits dense areas adaptively. <strong>S2 / H3</strong>: hierarchical cells used by Google and Uber.</li>
+            <li>Postgres with PostGIS or Redis GEO commands covers most interview scales.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-reliab"><summary><span class="t-title">Reliability patterns<span class="t-sub">Timeouts, retries, circuit breakers, load shedding</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Every network call gets a <strong>timeout</strong>. Budget them down the call chain.</li>
+            <li><strong>Retries</strong> with exponential backoff plus jitter, only for idempotent operations, with a retry budget to avoid retry storms.</li>
+            <li><strong>Circuit breaker</strong>: stop calling a failing dependency; probe periodically (half-open).</li>
+            <li><strong>Bulkheads</strong>: separate pools per dependency so one slow service can't exhaust all threads.</li>
+            <li><strong>Load shedding</strong> and graceful degradation: drop low-priority work first, serve stale cache, hide non-critical widgets.</li>
+            <li><strong>Hedged requests</strong>: send a second request after the p95 delay to cut tail latency.</li>
+            <li>Multi-AZ by default; multi-region active-passive or active-active when the SLA demands it. Cell-based architecture limits blast radius.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-obs"><summary><span class="t-title">Observability and SLOs<span class="t-sub">Metrics, logs, traces, error budgets</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Metrics: <strong>RED</strong> for services (Rate, Errors, Duration), <strong>USE</strong> for resources (Utilization, Saturation, Errors).</li>
+            <li>Structured logs with request IDs; distributed tracing (OpenTelemetry) across services.</li>
+            <li>SLI (measured, e.g. p99 latency) → SLO (target, 99.9% under 300 ms) → error budget (what you can spend on risky deploys).</li>
+            <li>Alert on symptoms users feel (SLO burn rate), not on every cause.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-sec"><summary><span class="t-title">Security basics<span class="t-sub">AuthN, AuthZ, tokens, multi-tenancy</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>AuthN via OAuth 2.0 / OIDC. Short-lived JWT access tokens plus refresh tokens; server-side sessions when you need instant revocation.</li>
+            <li>AuthZ: RBAC or ABAC, enforced at the service, not only at the gateway.</li>
+            <li>TLS everywhere, encryption at rest, secrets in a vault (KMS), least-privilege IAM.</li>
+            <li>Multi-tenant isolation: tenant_id on every row and query, row-level security, per-tenant rate limits, noisy-neighbor protection.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-stream"><summary><span class="t-title">Batch and stream processing<span class="t-sub">Spark, Flink, windows, watermarks</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Batch (Spark, warehouse SQL) for large periodic jobs; streaming (Flink, Kafka Streams) for low-latency aggregates.</li>
+            <li>Windows: tumbling, sliding, session. Watermarks decide when late events are too late.</li>
+            <li>Lambda architecture (batch + speed layer) vs Kappa (stream only, replay the log to recompute). Kappa is simpler when the log is retained.</li>
+            <li>Lakehouse: Parquet files with a table format (Iceberg, Delta) on object storage, queried by many engines.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="f-prob"><summary><span class="t-title">Probabilistic data structures<span class="t-sub">Bloom filter, HyperLogLog, Count-Min Sketch</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Bloom filter</strong>: "definitely not present" or "maybe present". Used for crawler dedupe, LSM reads, username checks.</li>
+            <li><strong>HyperLogLog</strong>: count distinct elements (unique visitors) in ~12 KB with ~1% error.</li>
+            <li><strong>Count-Min Sketch</strong>: approximate frequency counts for heavy hitters (top-K trending).</li>
+          </ul>
+        </div></details>
+      </div>
+    </section>
+
+    <!-- PROBLEMS -->
+    <section id="problems" data-sec="problems">
+      <div class="sec-head">
+        <div class="eyebrow">Part 4</div>
+        <h2>Classic problems</h2>
+        <p>Sketch answers, not full solutions. Try each one yourself first, then compare against the notes. <span class="tag core">core</span> marks the ones asked most often.</p>
+      </div>
+      <div class="topics">
+
+        <details class="topic" data-id="p-url"><summary><span class="t-title">URL shortener<span class="t-sub">bit.ly · read-heavy, key generation</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <h4>Numbers</h4><p>100 M new URLs/day ≈ 1.2K writes/s; 100:1 reads → ~120K reads/s peak-ish. 500 B/row × 36 B rows over 1 year ≈ 18 TB.</p>
+          <h4>Design</h4>
+          <div class="flow">POST /urls → API → ID generator → base62(id) → DB (code → long_url)
+GET /{code} → CDN/edge → API → Redis → DB → 301/302 redirect</div>
+          <ul>
+            <li>7 base62 characters = 62⁷ ≈ 3.5 trillion codes.</li>
+            <li>Key generation options: hash + collision check; counter + base62 (predictable, so add a shuffle); pre-generated key ranges handed to each server (no coordination).</li>
+            <li>KV store (DynamoDB/Cassandra) or sharded Postgres by code. Cache hot codes; most traffic hits a small set.</li>
+            <li>301 (cached by browsers, fewer hits, lose analytics) vs 302 (every click reaches you).</li>
+          </ul>
+          <h4>Deep dives</h4><p>Analytics via async click events to Kafka; custom aliases; expiry; abuse and malware scanning.</p>
+        </div></details>
+
+        <details class="topic" data-id="p-rate"><summary><span class="t-title">Distributed rate limiter<span class="t-sub">API gateway · shared counters, low latency</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <h4>Clarify</h4><p>Limit per user, IP or API key? Hard or soft limit? Added latency budget (&lt; 1 ms)? Fail open or closed?</p>
+          <h4>Design</h4>
+          <ul>
+            <li>Runs as middleware in the gateway. Rules from a config service, cached locally.</li>
+            <li>Token bucket state in Redis: one atomic Lua script reads tokens, refills by elapsed time, decrements, sets TTL.</li>
+            <li>Shard Redis by key. Return 429 plus <code>X-RateLimit-Remaining</code> and <code>Retry-After</code>.</li>
+            <li>To cut Redis round-trips: local token pre-allocation (take 10 tokens at a time) at the cost of slight overshoot.</li>
+            <li>If Redis is down: fail open for most APIs, fail closed for expensive or abuse-prone ones.</li>
+          </ul>
+          <div class="sr-note"><b>Key insight</b>Multi-region: accept per-region limits (limit/regions) with async sync, rather than a global synchronous counter.</div>
+        </div></details>
+
+        <details class="topic" data-id="p-lru"><summary><span class="t-title">LRU cache<span class="t-sub">In-process and distributed · O(1) get/put</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <a class="play-link" href="lru-lfu.html"><span><strong>LRU vs LFU playground</strong>Run both caches on the same requests and watch what each one evicts.</span><span aria-hidden="true">→</span></a>
+          <h4>In-process</h4>
+          <p>Hash map from key to node, plus a doubly linked list ordered by recency. Get moves the node to the head; put inserts at the head and evicts the tail when full. Both O(1).</p>
+<pre><code>class LRUCache:
+    def __init__(self, cap):
+        self.cap, self.map = cap, {}
+        self.head, self.tail = Node(), Node()      # sentinels
+        self.head.next, self.tail.prev = self.tail, self.head
+
+    def get(self, key):
+        node = self.map.get(key)
+        if not node: return -1
+        self._unlink(node); self._push_front(node)
+        return node.val
+
+    def put(self, key, val):
+        if key in self.map: self._unlink(self.map[key])
+        node = Node(key, val); self.map[key] = node; self._push_front(node)
+        if len(self.map) &gt; self.cap:
+            lru = self.tail.prev; self._unlink(lru); del self.map[lru.key]</code></pre>
+          <p>Thread safety: a single lock is simplest; segment the map into N shards, each with its own lock and list, for throughput. Java: <code>LinkedHashMap(accessOrder=true)</code>; Python: <code>OrderedDict.move_to_end</code>.</p>
+          <h4>Distributed cache</h4>
+          <ul>
+            <li>Consistent hashing with virtual nodes to place keys across cache nodes; client-side or proxy routing (twemproxy, mcrouter).</li>
+            <li>Each node runs LRU locally. Replicate for availability (primary/replica) or accept misses on node loss.</li>
+            <li>Approximate LRU (sample 5 keys, evict the oldest) avoids list overhead, as in Redis.</li>
+            <li>Hot keys, stampede and invalidation: see Fundamentals → Caching.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-kv"><summary><span class="t-title">Distributed key-value store<span class="t-sub">Dynamo-style · partitioning, quorums, repair</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Partition with consistent hashing; replicate each key to the next N nodes on the ring.</li>
+            <li>Tunable quorums: N=3, W=2, R=2 for strong-ish reads; W=1 for fast writes.</li>
+            <li>Conflict handling: vector clocks or last-writer-wins with timestamps.</li>
+            <li>Membership and failure detection via gossip; hinted handoff during brief outages; Merkle trees for anti-entropy repair.</li>
+            <li>Storage engine: LSM tree (commit log → memtable → SSTables, compaction, Bloom filters).</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-chat"><summary><span class="t-title">Chat / messaging system<span class="t-sub">WhatsApp, Slack · real-time delivery, ordering, presence</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <h4>Clarify</h4><p>1:1 and groups (max size?), online/offline delivery, read receipts, media, history sync across devices, end-to-end encryption?</p>
+          <h4>Numbers</h4><p>500 M DAU × 40 msgs = 20 B msgs/day ≈ 230K msgs/s average. Tens of millions of concurrent WebSocket connections.</p>
+          <h4>Design</h4>
+          <div class="flow">Client ⇄ WebSocket gateway (stateful) → Chat service → Message store (Cassandra, partition = conversation_id, sort = msg_id)
+                                  ↘ Session registry (Redis: user → gateway node)
+Recipient online  → route to their gateway → push
+Recipient offline → push notification service (APNs/FCM) + fetch on reconnect</div>
+          <ul>
+            <li>Message IDs: per-conversation sequence or Snowflake/UUIDv7, so ordering is defined per conversation.</li>
+            <li>Delivery states: sent (server ack) → delivered (device ack) → read. Client retries with a client-generated ID to dedupe.</li>
+            <li>Sync: each device keeps a cursor of the last message seen; on reconnect it pulls everything after it.</li>
+            <li>Groups: small groups fan out on write to each member's inbox; huge channels (Slack, Discord) fan out on read.</li>
+            <li>Presence: heartbeats with TTL in Redis; publish changes only to contacts who are online, and throttle.</li>
+            <li>Gateways communicate through a pub/sub layer (Redis pub/sub, Kafka, or direct RPC via the registry).</li>
+          </ul>
+          <div class="sr-note"><b>Key insight</b>Explain what happens when a gateway node dies: clients reconnect to another node, re-register, and pull missed messages by cursor. No message is lost because the store, not the socket, is the source of truth.</div>
+        </div></details>
+
+        <details class="topic" data-id="p-mq"><summary><span class="t-title">Distributed message queue<span class="t-sub">Design Kafka · partitions, replication, consumer groups</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Topic → partitions; each partition is an append-only log split into segment files. Sequential disk I/O plus OS page cache plus zero-copy sendfile make it fast.</li>
+            <li>Producers pick a partition by key hash (ordering per key) or round robin. Batch and compress.</li>
+            <li>Replication: each partition has a leader and followers; the in-sync replica set (ISR) decides when a write is committed. <code>acks=all</code> + <code>min.insync.replicas=2</code> for durability.</li>
+            <li>Consumers in a group split partitions among themselves; they commit offsets. Max parallelism = partition count.</li>
+            <li>Metadata and leader election via a controller quorum (KRaft, formerly ZooKeeper).</li>
+            <li>Retention by time or size; log compaction keeps the latest value per key.</li>
+            <li>Exactly-once: idempotent producer (sequence numbers per partition) plus transactions across partitions and offsets.</li>
+          </ul>
+          <h4>Queue vs log trade-off</h4><p>Need per-message ack, delays and visibility timeouts? Use SQS-style. Need replay, multiple independent consumers and high throughput? Use a log.</p>
+        </div></details>
+
+        <details class="topic" data-id="p-feed"><summary><span class="t-title">News feed / timeline<span class="t-sub">Twitter, Instagram · fan-out on write vs read</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>Fan-out on write (push)</strong>: on post, append the post ID to each follower's feed cache (Redis list). Fast reads; costly for users with millions of followers.</li>
+            <li><strong>Fan-out on read (pull)</strong>: build the feed at read time from followed users' recent posts. Cheap writes, slow reads.</li>
+            <li><strong>Hybrid</strong>: push for normal users; pull celebrity posts at read time and merge.</li>
+            <li>Feed cache stores only IDs (keep the last ~800); hydrate posts and authors from caches.</li>
+            <li>Ranking: candidate generation → ML scoring → re-rank for diversity. Cursor pagination.</li>
+            <li>Inactive users: skip fan-out to them; rebuild their feed lazily on login.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-notif"><summary><span class="t-title">Notification system<span class="t-sub">Push, SMS, email · multi-channel, reliable, rate-limited</span></span><span class="chev"></span></summary><div class="body">
+          <div class="flow">Producers → Notification API (validate, idempotency key) → Kafka (per channel)
+  → Workers: user prefs + templates + rate limits → providers (APNs, FCM, Twilio, SES)
+  → delivery status events → status store + analytics</div>
+          <ul>
+            <li>Separate queues per channel and priority so a flood of marketing email doesn't delay OTP SMS.</li>
+            <li>Respect preferences, quiet hours and per-user frequency caps. Dedupe with idempotency keys.</li>
+            <li>Retries with backoff for provider errors; fall back to a secondary provider; DLQ for poison messages.</li>
+            <li>Scheduled notifications: a delay queue or time-bucketed table scanned by a scheduler.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-typeahead"><summary><span class="t-title">Typeahead / autocomplete<span class="t-sub">Google search box · &lt; 100 ms, top-K per prefix</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Trie where each node stores the precomputed top-K completions; lookup is O(prefix length).</li>
+            <li>Build offline from query logs (hourly/daily batch), with time decay for trending terms; ship read-only snapshots to serving nodes.</li>
+            <li>Shard by prefix range; replicate heavily since it's read-only. Cache popular prefixes at the CDN/browser.</li>
+            <li>Client debounces keystrokes (~100–150 ms) and caches responses per prefix.</li>
+            <li>Filter offensive terms; personalize by blending global and user history.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-crawler"><summary><span class="t-title">Web crawler<span class="t-sub">Billions of pages · politeness, dedupe, frontier</span></span><span class="chev"></span></summary><div class="body">
+          <div class="flow">Seed URLs → URL frontier (priority + per-host queues) → fetchers (DNS cache, robots.txt)
+  → content store (S3) → parser → link extractor → URL filter + seen-set (Bloom) → frontier</div>
+          <ul>
+            <li>Politeness: one queue per host with a delay; respect robots.txt and crawl-delay.</li>
+            <li>Dedupe URLs (normalize, Bloom filter) and content (SimHash for near-duplicates).</li>
+            <li>Priority by PageRank/freshness; recrawl based on change frequency.</li>
+            <li>Avoid traps (infinite calendars) with depth and URL-length limits. Checkpoint the frontier for crash recovery.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-geo"><summary><span class="t-title">Ride-sharing / proximity service<span class="t-sub">Uber, Yelp · location updates, nearby search, matching</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Drivers send location every ~4 s: 1 M active drivers ≈ 250K writes/s. Keep it in memory (Redis GEO or an in-memory geo index keyed by H3/geohash cell), not in the main DB.</li>
+            <li>Nearby search: query the rider's cell and neighbors, filter by distance and availability, rank by ETA.</li>
+            <li>Matching: offer to one driver at a time with a timeout. Use a lock or conditional write on driver status so two riders can't get the same driver.</li>
+            <li>Trip state machine in a durable DB; location history streamed to Kafka for analytics and billing.</li>
+            <li>Shard by region/city; dense cities need finer cells. Surge pricing from supply/demand per cell.</li>
+          </ul>
+          <p><em>Yelp variant:</em> businesses are static and read-heavy, so a precomputed geohash/quadtree index cached in memory is enough.</p>
+        </div></details>
+
+        <details class="topic" data-id="p-video"><summary><span class="t-title">Video streaming<span class="t-sub">YouTube, Netflix · upload pipeline, adaptive bitrate, CDN</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Upload via pre-signed URL (resumable) → object store → event triggers a transcoding DAG (split into chunks, encode in parallel into multiple resolutions and codecs).</li>
+            <li>Package as HLS/DASH segments (2–6 s) with manifests. The player picks bitrate adaptively.</li>
+            <li>CDN serves almost all bytes; popular content is pre-positioned, long tail is pulled from origin.</li>
+            <li>Metadata in a SQL/NoSQL store; view counts via async aggregation (approximate is fine).</li>
+            <li>Cost control: encode long-tail videos lazily at fewer resolutions.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-dropbox"><summary><span class="t-title">File sync / storage<span class="t-sub">Dropbox, Google Drive · chunking, dedupe, sync conflicts</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Split files into ~4 MB chunks addressed by content hash; upload only changed chunks; dedupe identical chunks across users.</li>
+            <li>Metadata service (SQL): file → ordered list of chunk hashes, versions, permissions.</li>
+            <li>Clients learn about changes via long polling / WebSocket notifications, then pull the new metadata and missing chunks.</li>
+            <li>Conflicts: if two devices edit the same base version, keep both ("conflicted copy") rather than silently merge.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-ticket"><summary><span class="t-title">Ticket booking<span class="t-sub">Ticketmaster · contention, holds, flash crowds</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Seat states: AVAILABLE → HELD (with expiry) → BOOKED. Hold via conditional update: <code>UPDATE seats SET status='HELD', hold_until=… WHERE id=? AND status='AVAILABLE'</code>, or Redis <code>SET NX EX</code> with DB as the source of truth.</li>
+            <li>Holds expire after ~10 min; a sweeper or TTL releases them.</li>
+            <li>Payment with an idempotency key; confirm booking only on payment success (saga with compensation).</li>
+            <li>Flash crowds: a virtual waiting room (queue tokens) admits users at a controlled rate; cache the event page at the CDN; seat map availability can be slightly stale.</li>
+          </ul>
+          <div class="sr-note"><b>Key insight</b>Strong consistency on the seat row is non-negotiable; everything else (browse, search, seat map) can be eventually consistent and cached.</div>
+        </div></details>
+
+        <details class="topic" data-id="p-pay"><summary><span class="t-title">Payment system<span class="t-sub">Stripe-like · exactly-once money movement, ledger</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Idempotency key per payment request; store request → result before calling the processor.</li>
+            <li>Double-entry ledger: every transfer is two immutable entries (debit + credit) that sum to zero. Never update balances in place without the ledger.</li>
+            <li>Payment state machine: CREATED → AUTHORIZED → CAPTURED → SETTLED / FAILED / REFUNDED. Persist transitions.</li>
+            <li>External PSP calls can time out with unknown results: retry with the same idempotency key, and reconcile daily against PSP settlement files.</li>
+            <li>Relational DB with serializable or carefully locked transactions; outbox for downstream events.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-docs"><summary><span class="t-title">Collaborative editor<span class="t-sub">Google Docs · concurrent edits, OT vs CRDT</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li><strong>OT</strong> (operational transformation): a central server orders operations and transforms concurrent ones. Google Docs uses this.</li>
+            <li><strong>CRDT</strong> (Yjs, Automerge): operations commute, so replicas converge without a central order. Works offline and peer-to-peer; more metadata.</li>
+            <li>One document session lives on one server (route by doc_id) holding the in-memory state; clients connect via WebSocket.</li>
+            <li>Persist an operation log plus periodic snapshots; cursors and presence are ephemeral.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-leader"><summary><span class="t-title">Leaderboard<span class="t-sub">Gaming · real-time rank for millions</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Redis sorted set: <code>ZINCRBY</code> to update, <code>ZREVRANK</code> for a player's rank, <code>ZREVRANGE</code> for top N. All O(log n).</li>
+            <li>Persist scores in a DB; the sorted set can be rebuilt.</li>
+            <li>Very large boards: shard by score range, or compute exact rank only for the top and approximate percentiles for the rest.</li>
+            <li>Time-bounded boards (weekly): one key per period with TTL.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-sched"><summary><span class="t-title">Distributed job scheduler<span class="t-sub">Cron at scale · at-least-once, no double runs</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Jobs table with <code>next_run_at</code> indexed. Schedulers poll due jobs with <code>SELECT … FOR UPDATE SKIP LOCKED</code> or partition jobs by hash across scheduler nodes.</li>
+            <li>Enqueue due jobs to a queue; workers execute and report status. Visibility timeout and heartbeats detect dead workers.</li>
+            <li>Jobs must be idempotent since at-least-once is the realistic guarantee.</li>
+            <li>Retries with backoff, max attempts, DLQ; history table for auditing.</li>
+            <li>Long multi-step workflows: use durable execution (Temporal) rather than hand-rolled state.</li>
+          </ul>
+        </div></details>
+
+        <details class="topic" data-id="p-metrics"><summary><span class="t-title">Metrics and monitoring system<span class="t-sub">Datadog/Prometheus · high write volume, time-series</span></span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Agents batch and push (or the server pulls) samples → Kafka → ingestion → time-series DB.</li>
+            <li>TSDB: compress with delta-of-delta timestamps and XOR floats (Gorilla); partition by series and time block.</li>
+            <li>Downsample older data (1 s → 1 min → 1 h) to control cost. Cardinality (tag combinations) is the main scaling risk.</li>
+            <li>Alerting evaluator runs rules on a schedule; dedupe and route alerts.</li>
+          </ul>
+        </div></details>
+      </div>
+      <p class="filter-empty" id="emptyNote" hidden>No topics match that filter.</p>
+    </section>
+
+    <!-- AI -->
+    <section id="ai" data-sec="ai">
+      <div class="sec-head">
+        <div class="eyebrow">Part 5</div>
+        <h2>AI-era systems</h2>
+        <p>LLM-powered products reuse all the fundamentals above. The new constraints are GPU cost, token-based throughput, long and variable latency, and non-deterministic output that needs evaluation.</p>
+      </div>
+      <div class="topics">
+        <details class="topic" data-id="ai-numbers"><summary><span class="t-title">AI numbers to know<span class="t-sub">Tokens, vectors, GPU memory</span></span><span class="tag hot">new</span><span class="chev"></span></summary><div class="body">
+          <div class="tbl"><table>
+            <tr><th>Fact</th><th>Approx value</th></tr>
+            <tr><td>1 token (English)</td><td class="num">≈ 4 chars ≈ 0.75 words</td></tr>
+            <tr><td>One page of text</td><td class="num">≈ 500–700 tokens</td></tr>
+            <tr><td>Embedding, 1,536 dims × float32</td><td class="num">≈ 6 KB per vector</td></tr>
+            <tr><td>10 M chunks of 1,536-dim vectors</td><td class="num">≈ 60 GB raw (+50–100% for HNSW graph)</td></tr>
+            <tr><td>Model weights at FP16</td><td class="num">2 bytes/param: 8B ≈ 16 GB, 70B ≈ 140 GB</td></tr>
+            <tr><td>Datacenter GPU memory</td><td class="num">80–192 GB per GPU</td></tr>
+            <tr><td>Time to first token (target)</td><td class="num">&lt; 0.5–1 s</td></tr>
+            <tr><td>Decode speed per stream</td><td class="num">~30–150 tokens/s</td></tr>
+          </table></div>
+          <p>Cost scales with tokens, so estimates should be in tokens/s and $/1M tokens, not only QPS.</p>
+        </div></details>
+        <details class="topic" data-id="ai-rag"><summary><span class="t-title">RAG system (chat over your documents)<span class="t-sub">Ingestion, retrieval, generation, evaluation</span></span><span class="tag hot">new</span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <div class="flow">Ingest:  sources → parse (PDF, HTML) → chunk (300–800 tokens, overlap) → embed → vector index + keyword index + metadata (ACLs)
+Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank (cross-encoder) → top-k chunks
+         → prompt with citations → LLM → stream answer (SSE) → log for evals</div>
+          <ul>
+            <li>Hybrid retrieval beats pure vector search for names, codes and exact terms. Fuse with reciprocal rank fusion.</li>
+            <li>ANN indexes: <strong>HNSW</strong> (graph, fast, memory-heavy), <strong>IVF</strong> (clusters), <strong>PQ</strong> (compressed vectors). Recall vs latency vs memory.</li>
+            <li>Permissions: filter by the user's ACLs at query time (pre-filter on metadata), never after generation.</li>
+            <li>Freshness: incremental re-indexing via CDC or document change events; re-embed when the embedding model changes (versioned indexes).</li>
+            <li>Evaluate retrieval (recall@k, MRR) and generation (faithfulness/groundedness, answer relevance) on a golden set, with LLM-as-judge plus human spot checks.</li>
+          </ul>
+          <div class="sr-note"><b>Key insight</b>Say when RAG is the wrong tool: small static corpora fit in a long context window with prompt caching; structured questions are better served by text-to-SQL or tool calls.</div>
+        </div></details>
+        <details class="topic" data-id="ai-serving"><summary><span class="t-title">LLM inference serving<span class="t-sub">Batching, KV cache, GPU utilization, autoscaling</span></span><span class="tag hot">new</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Two phases: <strong>prefill</strong> (process the prompt, compute-bound, sets time to first token) and <strong>decode</strong> (one token at a time, memory-bandwidth-bound).</li>
+            <li><strong>Continuous batching</strong>: add and remove requests from the batch at every decode step to keep the GPU busy (vLLM, TGI, TensorRT-LLM).</li>
+            <li><strong>KV cache</strong> stores attention state per request and grows with context length; it often limits concurrency. PagedAttention allocates it in blocks.</li>
+            <li><strong>Prefix / prompt caching</strong>: reuse the KV cache for shared system prompts and documents. Big latency and cost win.</li>
+            <li>Other levers: quantization (FP8/INT4), speculative decoding (a small draft model proposes tokens), tensor/pipeline parallelism across GPUs, disaggregated prefill and decode pools.</li>
+            <li>Autoscale on queue depth and KV-cache utilization, not CPU. GPU cold start (loading weights) takes minutes, so keep warm capacity.</li>
+            <li>Route by request: small cheap model for easy queries, large model for hard ones.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="ai-gateway"><summary><span class="t-title">LLM gateway / AI platform API<span class="t-sub">Token rate limits, cost tracking, fallbacks, streaming</span></span><span class="tag hot">new</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>One internal endpoint in front of many model providers: auth, per-team quotas, logging, PII redaction.</li>
+            <li>Rate limit on <strong>tokens per minute</strong> as well as requests; estimate input tokens up front, reconcile output tokens after.</li>
+            <li>Fallbacks across providers/regions on 429/5xx; circuit breakers; timeouts sized for long generations.</li>
+            <li>Streaming via SSE end to end; the gateway must not buffer the whole response.</li>
+            <li>Caching: exact-match cache, provider prompt caching, and semantic caching (embedding similarity) for FAQ-like traffic, with care about correctness.</li>
+            <li>Cost attribution per team, feature and model; budgets and alerts.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="ai-agents"><summary><span class="t-title">AI agent platform<span class="t-sub">Tool calling loops, sandboxes, durable state, MCP</span></span><span class="tag hot">new</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Loop: model proposes a tool call → platform validates and executes → result appended to context → repeat until done or budget exhausted.</li>
+            <li>Agent runs last minutes to hours, so treat them as <strong>durable workflows</strong> (Temporal-style): checkpoint each step, resume after crashes, make tool calls idempotent.</li>
+            <li>Tools via a standard interface (Model Context Protocol, function schemas); per-tool auth scoped to the end user.</li>
+            <li>Code execution in isolated sandboxes (gVisor, Firecracker microVMs) with network and resource limits.</li>
+            <li>Guardrails: human approval for side effects (payments, emails), prompt-injection defenses for untrusted tool output, step and cost limits.</li>
+            <li>Context management: summarize or compact history, retrieve memory on demand, keep the window under budget.</li>
+            <li>Observability: trace every step (prompt, tool call, tokens, latency) for debugging and evals.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="ai-recsys"><summary><span class="t-title">Recommendation system<span class="t-sub">Candidate generation, ranking, feature store</span></span><span class="chev"></span></summary><div class="body">
+          <div class="flow">Millions of items → candidate generation (two-tower embeddings + ANN, co-visitation, trending) → ~1,000
+  → ranking model (features from feature store) → ~100 → re-rank (diversity, business rules) → ~20 shown</div>
+          <ul>
+            <li>Feature store with an offline store (training) and an online store (low-latency serving); avoid training/serving skew.</li>
+            <li>Log impressions and interactions to Kafka for training data and real-time features.</li>
+            <li>Cold start: popularity and content-based features for new users and items.</li>
+            <li>Evaluate offline (NDCG, AUC) then online via A/B tests.</li>
+          </ul>
+        </div></details>
+        <details class="topic" data-id="ai-evals"><summary><span class="t-title">Evals, guardrails and moderation<span class="t-sub">Shipping non-deterministic systems safely</span></span><span class="tag hot">new</span><span class="chev"></span></summary><div class="body">
+          <ul>
+            <li>Offline eval suite (golden datasets, LLM-as-judge, regression tests on prompts) runs in CI before a prompt or model change ships.</li>
+            <li>Online: sample production traffic for grading, user feedback signals, A/B tests on quality and cost.</li>
+            <li>Input and output guardrails: classifiers for PII, toxicity and jailbreaks; schema validation for structured output.</li>
+            <li>Moderation pipeline for user content: fast cheap classifier on everything, escalate uncertain cases to an LLM, then to humans; queue with SLAs.</li>
+          </ul>
+        </div></details>
+      </div>
+    </section>
+
+    <!-- TRENDS -->
+    <section id="trends" data-sec="trends">
+      <div class="sec-head">
+        <div class="eyebrow">Part 6</div>
+        <h2>Current trends</h2>
+        <p>Patterns that are common in production today. Use them where they solve the problem in front of you, not for their own sake.</p>
+      </div>
+      <div class="topics">
+        <details class="topic" data-id="t-durable"><summary><span class="t-title">Durable execution<span class="t-sub">Temporal, Restate, Step Functions</span></span><span class="chev"></span></summary><div class="body"><p>Write long-running, multi-step workflows as code; the engine persists each step and retries on failure. Replaces hand-built sagas, cron chains and state tables. Strong fit for payments, onboarding and AI agents.</p></div></details>
+        <details class="topic" data-id="t-cdc"><summary><span class="t-title">CDC and event-driven architecture<span class="t-sub">Debezium, outbox, streaming ETL</span></span><span class="chev"></span></summary><div class="body"><p>Stream database changes from the write-ahead log to Kafka, then feed caches, search indexes and warehouses from that stream. One source of truth, many derived views.</p></div></details>
+        <details class="topic" data-id="t-pg"><summary><span class="t-title">Postgres as the default for (almost) everything<span class="t-sub">pgvector, JSONB, queues, full text</span></span><span class="chev"></span></summary><div class="body"><p>For moderate scale, one Postgres can cover relational data, documents (JSONB), vectors (pgvector), queues (SKIP LOCKED) and simple search. Fewer moving parts. Distributed SQL (Spanner, CockroachDB, Aurora DSQL) when you outgrow a single primary.</p></div></details>
+        <details class="topic" data-id="t-lake"><summary><span class="t-title">Lakehouse and open table formats<span class="t-sub">Iceberg, Delta, object storage</span></span><span class="chev"></span></summary><div class="body"><p>Analytics data as Parquet on S3 with an Iceberg/Delta catalog, queried by Spark, Trino, Snowflake or DuckDB. Separates storage from compute and avoids lock-in.</p></div></details>
+        <details class="topic" data-id="t-cell"><summary><span class="t-title">Cell-based architecture<span class="t-sub">Blast-radius control at AWS scale</span></span><span class="chev"></span></summary><div class="body"><p>Split the system into identical, independent cells, each serving a subset of customers. A bad deploy or a poison request takes down one cell, not everyone. Pairs with gradual, cell-by-cell rollouts.</p></div></details>
+        <details class="topic" data-id="t-edge"><summary><span class="t-title">Edge compute and serverless<span class="t-sub">Workers, Lambda, edge KV</span></span><span class="chev"></span></summary><div class="body"><p>Run auth, personalization and routing close to users. Serverless removes capacity planning for spiky loads; watch cold starts, connection limits to databases and cost at steady high load.</p></div></details>
+        <details class="topic" data-id="t-local"><summary><span class="t-title">Local-first and CRDT sync<span class="t-sub">Offline-capable apps</span></span><span class="chev"></span></summary><div class="body"><p>Data lives on the device and syncs in the background with CRDT merge. Instant UI and offline support; the server becomes a sync and backup peer. Seen in Figma, Linear and Notion-like apps.</p></div></details>
+        <details class="topic" data-id="t-finops"><summary><span class="t-title">Cost awareness (FinOps)<span class="t-sub">Every design has a dominant cost line</span></span><span class="chev"></span></summary><div class="body"><p>Know the dominant cost line (egress, GPU hours, storage tiering, cross-AZ traffic) and one way to cut it. This matters most for AI systems.</p></div></details>
+      </div>
+    </section>
+
+    <!-- RESOURCES -->
+    <section id="resources" data-sec="resources">
+      <div class="sec-head">
+        <div class="eyebrow">Part 7</div>
+        <h2>Further reading</h2>
+      </div>
+      <div class="topics">
+        <details class="topic" data-id="w-res"><summary><span class="t-title">Resources<span class="t-sub">Books, courses, blogs</span></span><span class="chev"></span></summary><div class="body"><ul>
+          <li><em>Designing Data-Intensive Applications</em> (Kleppmann): the single best depth resource.</li>
+          <li><em>System Design Interview</em> Vol. 1 &amp; 2 (Alex Xu) and ByteByteGo: breadth of classic problems.</li>
+          <li><a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/introduction" target="_blank" rel="noopener">Hello Interview</a>: modern problem walkthroughs.</li>
+          <li><em>AI Engineering</em> and <em>Designing Machine Learning Systems</em> (Chip Huyen): for AI systems.</li>
+          <li>Engineering blogs: Netflix, Uber, Discord, Stripe, Cloudflare, AWS Builders' Library.</li>
+        </ul></div></details>
+      </div>
+    </section>
+
+    <footer>Numbers are rounded orders of magnitude for quick reasoning; check vendor docs before using them for real capacity planning.</footer>
+  </main>
+</div>
+
+<script>
+(function () {
+  // Latency bars
+  var lat = [
+    ["L1 cache reference", 1, "1 ns"],
+    ["Main memory reference", 100, "100 ns"],
+    ["Compress 1 KB (fast codec)", 2000, "2 µs"],
+    ["Read 1 MB sequentially from RAM", 10000, "10 µs"],
+    ["Random 4 KB read, NVMe SSD", 20000, "20 µs"],
+    ["Round trip in same datacenter", 500000, "0.5 ms"],
+    ["Read 1 MB sequentially, SSD", 1000000, "1 ms"],
+    ["Redis GET over network", 1000000, "~1 ms"],
+    ["HDD seek", 10000000, "10 ms"],
+    ["Round trip US East ↔ West", 70000000, "70 ms"],
+    ["Round trip California ↔ Europe", 150000000, "150 ms"]
+  ];
+  var max = Math.log10(150000000);
+  document.getElementById("lat").innerHTML = lat.map(function (r) {
+    var w = Math.max(3, (Math.log10(r[1]) / max) * 100);
+    return '<div class="lat-row"><span>' + r[0] + '</span><span class="bar"><i style="width:' + w.toFixed(1) + '%"></i></span><span class="v">' + r[2] + '</span></div>';
+  }).join("");
+
+  // Calculator
+  function fmt(n) {
+    if (!isFinite(n)) return "–";
+    var u = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+    for (var i = 0; i < u.length; i++) if (n >= u[i][0]) return (n / u[i][0]).toFixed(n / u[i][0] < 10 ? 1 : 0) + u[i][1];
+    return n < 10 ? n.toFixed(1) : Math.round(n).toString();
+  }
+  function bytes(n) {
+    var u = ["B", "KB", "MB", "GB", "TB", "PB", "EB"], i = 0;
+    while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+    return (n < 10 ? n.toFixed(1) : Math.round(n)) + " " + u[i];
+  }
+  function val(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
+  function calc() {
+    var dau = val("c-dau"), w = val("c-writes"), ratio = val("c-ratio"), size = val("c-size"),
+        years = val("c-years"), rep = val("c-rep"), peak = val("c-peak") || 1;
+    var writesDay = dau * w, wq = writesDay / 86400, rq = wq * ratio;
+    var perDay = writesDay * size, total = perDay * 365 * years * rep;
+    var egress = rq * size;
+    var rows = [
+      ["Writes / day", fmt(writesDay)],
+      ["Write QPS (avg → peak)", fmt(wq) + " → " + fmt(wq * peak)],
+      ["Read QPS (avg → peak)", fmt(rq) + " → " + fmt(rq * peak)],
+      ["New data / day", bytes(perDay)],
+      ["Storage over " + years + " yr (×" + rep + ")", bytes(total)],
+      ["Read bandwidth (avg)", bytes(egress) + "/s"]
+    ];
+    document.getElementById("calcOut").innerHTML = rows.map(function (r) { return "<div><span>" + r[0] + "</span><b>" + r[1] + "</b></div>"; }).join("");
+    var notes = [];
+    if (wq * peak > 10000) notes.push("Peak writes exceed one SQL primary: shard, or use a natively partitioned store.");
+    else notes.push("Peak writes fit on a single well-tuned SQL primary.");
+    if (rq * peak > 50000) notes.push("Reads need a cache tier and/or many replicas.");
+    else if (rq * peak > 5000) notes.push("Read replicas plus a cache are worth it.");
+    if (total > 50e12) notes.push("Storage is beyond one node: partition data, and tier cold data to object storage.");
+    document.getElementById("calcVerdict").textContent = notes.join(" ");
+  }
+  document.getElementById("calcForm").addEventListener("input", calc);
+  calc();
+
+  // Progress
+  var KEY = "sdp-progress-v1", state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { state = {}; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  var topics = Array.prototype.slice.call(document.querySelectorAll("details.topic"));
+  topics.forEach(function (d) {
+    var id = d.getAttribute("data-id");
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.className = "chk"; cb.id = "chk-" + id;
+    cb.setAttribute("aria-label", "Mark as known: " + d.querySelector(".t-title").firstChild.textContent.trim());
+    cb.checked = !!state[id];
+    cb.addEventListener("click", function (e) { e.stopPropagation(); });
+    cb.addEventListener("change", function () { state[id] = cb.checked; save(); update(); });
+    var s = d.querySelector("summary"); s.insertBefore(cb, s.firstChild);
+  });
+  function update() {
+    var done = 0;
+    topics.forEach(function (d) {
+      var on = d.querySelector(".chk").checked; d.classList.toggle("is-done", on); if (on) done++;
+    });
+    var pct = topics.length ? Math.round(done / topics.length * 100) : 0;
+    document.getElementById("meterFill").style.width = pct + "%";
+    document.querySelector(".overall .meter").setAttribute("aria-valuenow", pct);
+    document.getElementById("overallText").textContent = done + " of " + topics.length + " topics checked off (" + pct + "%)";
+    document.querySelectorAll("[data-count]").forEach(function (el) {
+      var sec = document.getElementById(el.getAttribute("data-count"));
+      var all = sec.querySelectorAll("details.topic"), n = sec.querySelectorAll("details.topic .chk:checked").length;
+      el.textContent = n + "/" + all.length;
+      el.parentNode.classList.toggle("done", n === all.length && all.length > 0);
+    });
+  }
+  update();
+
+  var reset = document.getElementById("reset"), armed = false, t;
+  reset.addEventListener("click", function () {
+    if (!armed) { armed = true; reset.classList.add("armed"); reset.textContent = "Click again to clear"; t = setTimeout(function () { armed = false; reset.classList.remove("armed"); reset.textContent = "Reset progress"; }, 3000); return; }
+    clearTimeout(t); armed = false; reset.classList.remove("armed"); reset.textContent = "Reset progress";
+    state = {}; save(); topics.forEach(function (d) { d.querySelector(".chk").checked = false; }); update();
+  });
+
+  // Filter
+  var search = document.getElementById("search");
+  search.addEventListener("input", function () {
+    var q = search.value.trim().toLowerCase(), shown = 0;
+    topics.forEach(function (d) {
+      var hit = !q || d.textContent.toLowerCase().indexOf(q) !== -1;
+      d.hidden = !hit; if (hit) shown++;
+      if (q && hit) d.open = true;
+    });
+    document.getElementById("emptyNote").hidden = shown > 0;
+  });
+})();
+</script>

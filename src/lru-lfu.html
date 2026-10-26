@@ -1,0 +1,430 @@
+<title>LRU vs LFU Playground</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control bar and access tape on top, LRU and LFU cache panels side by side, short explainer below. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #5a6475;
+  --line: #d9dee7;
+  --accent: #0d7a6b;
+  --accent-soft: #dff1ec;
+  --miss: #9a5b00;
+  --miss-soft: #fbefd9;
+  --evict: #a3305f;
+  --evict-soft: #f7e4ec;
+  --chip: #eef1f6;
+  --f-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+    --accent: #4fc9b4; --accent-soft: #15332f; --miss: #f0b45a; --miss-soft: #3a2c14;
+    --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+  --accent: #4fc9b4; --accent-soft: #15332f; --miss: #f0b45a; --miss-soft: #3a2c14;
+  --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px; display: grid; gap: 24px; }
+header { display: grid; gap: 8px; }
+h1 { font: 800 clamp(28px, 4.5vw, 40px)/1.05 var(--f-display); letter-spacing: -0.02em; margin: 0; }
+h2 { font: 800 20px/1.2 var(--f-display); margin: 0; }
+h3 { font: 600 16px/1.3 var(--f-display); margin: 0 0 6px; }
+p { margin: 0; max-width: 70ch; }
+.lede { color: var(--muted); font-size: 16px; }
+.label { font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field.grow { flex: 1 1 240px; }
+select, input[type=text] { font: 500 14px var(--f-body); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: 600 14px var(--f-body); border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+.scenario-note { font-size: 13.5px; color: var(--muted); }
+
+/* Tape */
+.tape-box { display: grid; gap: 8px; }
+.tape { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 8px; }
+.step { flex: none; display: grid; gap: 3px; justify-items: center; }
+.step .k { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: var(--chip); font: 600 15px var(--f-mono); color: var(--muted); border: 2px solid transparent; }
+.step.done .k { color: var(--ink); }
+.step.cur .k { border-color: var(--accent); color: var(--ink); background: var(--surface); }
+.step .m { width: 34px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.step .m i { height: 14px; border-radius: 3px; font: normal 600 9px/14px var(--f-mono); text-align: center; background: var(--chip); color: transparent; }
+.step .m i.h { background: var(--accent-soft); color: var(--accent); }
+.step .m i.x { background: var(--miss-soft); color: var(--miss); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* Keys */
+.keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.keys button { width: 40px; height: 40px; padding: 0; font: 600 16px var(--f-mono); }
+
+/* Panels */
+.panels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 760px) { .panels { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; min-width: 0; align-content: start; }
+.panel.lead { border-color: var(--accent); }
+.p-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.p-head .rule { font-size: 13px; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.stat b { display: block; font: 600 22px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.stat.hit b { color: var(--accent); }
+.stat.miss b { color: var(--miss); }
+.axis { display: flex; justify-content: space-between; font: 500 11px var(--f-mono); color: var(--muted); letter-spacing: .04em; }
+.slots { display: grid; gap: 8px; grid-template-columns: repeat(var(--cap), minmax(0, 1fr)); }
+.slot { position: relative; height: 76px; border-radius: 10px; border: 2px dashed var(--line); display: grid; place-items: center; align-content: center; gap: 2px; background: var(--bg); transition: background .25s, border-color .25s; }
+.slot.full { border-style: solid; background: var(--surface); }
+.slot .key { font: 600 24px/1 var(--f-mono); }
+.slot .freq { font: 500 11.5px var(--f-mono); color: var(--muted); }
+.slot.victim { border-color: var(--evict); }
+.slot.victim::after { content: "evicts next"; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); background: var(--surface); color: var(--evict); font: 600 9.5px var(--f-mono); padding: 0 4px; white-space: nowrap; letter-spacing: .03em; }
+.slot.flash-hit { background: var(--accent-soft); border-color: var(--accent); }
+.slot.flash-new { background: var(--miss-soft); border-color: var(--miss); }
+.event { font-size: 14px; min-height: 44px; border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+.event.hit { background: var(--accent-soft); }
+.event.miss { background: var(--miss-soft); }
+.event s { color: var(--evict); font-family: var(--f-mono); font-weight: 600; text-decoration-thickness: 2px; }
+.event b { font-family: var(--f-mono); }
+
+.verdict { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 14px 16px; font-size: 15px; }
+.verdict strong { font-weight: 600; }
+
+/* Explainer */
+.explain { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.explain > div { min-width: 0; }
+.explain ul { margin: 6px 0 0; padding-left: 18px; }
+.explain li { margin: 3px 0; }
+pre { font: 12.5px/1.55 var(--f-mono); background: var(--chip); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 8px 0 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="label">Cache eviction playground</span>
+    <h1>LRU vs LFU</h1>
+    <p class="lede">Both caches receive the same stream of requests. When a cache is full, LRU evicts the key used longest ago and LFU evicts the key used least often. Step through a scenario and watch which one keeps the right keys.</p>
+  </header>
+
+  <div class="controls">
+    <div class="field grow">
+      <label class="label" for="scenario">Scenario</label>
+      <select id="scenario"></select>
+    </div>
+    <div class="field">
+      <label class="label" for="cap">Cache size</label>
+      <select id="cap"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+    </div>
+    <div class="field">
+      <label class="label" for="speed">Speed</label>
+      <select id="speed"><option value="900">Slow</option><option value="500" selected>Normal</option><option value="200">Fast</option></select>
+    </div>
+    <div class="btns">
+      <button id="play" class="primary" type="button">Play</button>
+      <button id="stepBtn" type="button">Step</button>
+      <button id="resetBtn" type="button">Restart</button>
+    </div>
+    <p class="scenario-note" id="scenarioNote" style="flex-basis:100%"></p>
+  </div>
+
+  <div class="tape-box">
+    <div class="legend">
+      <span class="label">Request stream</span>
+      <span><i class="sw" style="background:var(--accent-soft);border:1px solid var(--accent)"></i>hit</span>
+      <span><i class="sw" style="background:var(--miss-soft);border:1px solid var(--miss)"></i>miss</span>
+      <span>Left mark = LRU, right mark = LFU</span>
+    </div>
+    <div class="tape" id="tape" aria-label="Request stream"></div>
+  </div>
+
+  <div class="tape-box">
+    <span class="label">Or request a key yourself</span>
+    <div class="keys" id="keys"></div>
+  </div>
+
+  <div class="verdict" id="verdict" hidden></div>
+
+  <div class="panels">
+    <section class="panel" id="p-lru">
+      <div class="p-head"><h2>LRU</h2><span class="rule">Evicts the least recently used key</span></div>
+      <div class="stats" data-stats></div>
+      <div class="axis"><span>most recent</span><span>least recent</span></div>
+      <div class="slots" data-slots></div>
+      <div class="event" data-event>Waiting for the first request.</div>
+    </section>
+    <section class="panel" id="p-lfu">
+      <div class="p-head"><h2>LFU</h2><span class="rule">Evicts the least frequently used key</span></div>
+      <div class="stats" data-stats></div>
+      <div class="axis"><span>most used</span><span>least used</span></div>
+      <div class="slots" data-slots></div>
+      <div class="event" data-event>Waiting for the first request.</div>
+    </section>
+  </div>
+
+  <div class="explain">
+    <div>
+      <h3>How LRU works</h3>
+      <p>A hash map plus a doubly linked list ordered by recency. A hit moves the key to the front; a miss inserts at the front and drops the tail when full. Both are O(1).</p>
+      <ul>
+        <li>Good when recent use predicts the next use: sessions, recently opened files, page caches.</li>
+        <li>Weak spot: a one-off scan of many keys pushes out the keys you actually reuse.</li>
+      </ul>
+<pre><code>get(k):  if k in map: move k to front; return hit
+put(k):  if full: remove tail
+         insert k at front</code></pre>
+    </div>
+    <div>
+      <h3>How LFU works</h3>
+      <p>Each key keeps a use count. When full, the key with the lowest count is evicted; ties go to the one used longest ago. O(1) versions keep a list of keys per count.</p>
+      <ul>
+        <li>Good when popularity is stable: CDN assets, best-selling products, config keys.</li>
+        <li>Weak spot: keys that were popular in the past keep high counts and block new favorites. Real systems decay counts over time.</li>
+      </ul>
+<pre><code>get(k):  if k in map: count[k] += 1; return hit
+put(k):  if full: remove key with min (count, last_used)
+         insert k with count 1</code></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+// CACHE-START
+function LRUCache(cap) { this.cap = cap; this.order = []; } // order[0] is most recent
+LRUCache.prototype.access = function (k) {
+  var i = this.order.indexOf(k);
+  if (i !== -1) { this.order.splice(i, 1); this.order.unshift(k); return { hit: true, key: k }; }
+  var ev = null;
+  if (this.order.length >= this.cap) ev = this.order.pop();
+  this.order.unshift(k);
+  return { hit: false, key: k, evicted: ev };
+};
+LRUCache.prototype.view = function () { return this.order.map(function (k) { return { key: k }; }); };
+
+function LFUCache(cap) { this.cap = cap; this.m = new Map(); this.tick = 0; }
+LFUCache.prototype.access = function (k) {
+  this.tick++;
+  var e = this.m.get(k);
+  if (e) { e.f++; e.t = this.tick; return { hit: true, key: k }; }
+  var ev = null;
+  if (this.m.size >= this.cap) { var v = this.view(); ev = v[v.length - 1].key; this.m.delete(ev); }
+  this.m.set(k, { f: 1, t: this.tick });
+  return { hit: false, key: k, evicted: ev };
+};
+// Highest count first; within a count, most recent first. The last item is the eviction victim.
+LFUCache.prototype.view = function () {
+  var out = [];
+  this.m.forEach(function (e, k) { out.push({ key: k, f: e.f, t: e.t }); });
+  return out.sort(function (a, b) { return b.f - a.f || b.t - a.t; });
+};
+// CACHE-END
+
+(function () {
+  var KEYS = "ABCDEFGHIJ".split("");
+  var SCENARIOS = [
+    { id: "scan", name: "Popular keys, then a one-off scan",
+      seq: "A B C A B A C B A D E F G H A B C A B C",
+      note: "A, B and C are requested again and again. Then D–H are each read once, like a report scanning a table. Who still has A, B and C afterwards?",
+      why: "The scan pushed A, B and C out of LRU because they weren't the most recent. LFU kept them because their counts were higher than any scanned key." },
+    { id: "shift", name: "Interest shifts to new keys",
+      seq: "A B A B A B A B C D E F C D E F C D E F",
+      note: "A and B are hot at first, then nobody asks for them again. Traffic moves to C, D, E and F.",
+      why: "LFU kept A and B because of their old high counts, leaving only two slots for four new keys, so it kept missing. LRU forgot A and B as soon as they went cold." },
+    { id: "zipf", name: "Skewed random traffic",
+      seq: null,
+      note: "Random requests where A is far more popular than B, B more than C, and so on. Typical of real web traffic. Restart to draw a new sample.",
+      why: "With stable, skewed popularity LFU usually edges ahead, but the gap is small and depends on the sample." },
+    { id: "custom", name: "Custom sequence",
+      seq: "A B C D A E A B F",
+      note: "Type your own sequence below, or click the key buttons.",
+      why: "" }
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var scenarioSel = $("scenario"), capSel = $("cap"), speedSel = $("speed");
+  var state = { seq: [], pos: 0, results: [], timer: null, lastLRU: null, lastLFU: null };
+  var lru, lfu;
+
+  SCENARIOS.forEach(function (s) {
+    var o = document.createElement("option"); o.value = s.id; o.textContent = s.name; scenarioSel.appendChild(o);
+  });
+  // Custom input lives inside the note area when "custom" is selected
+  var customWrap = document.createElement("div");
+  customWrap.className = "field"; customWrap.style.flexBasis = "100%";
+  customWrap.innerHTML = '<label class="label" for="customSeq">Your sequence (letters A–J)</label><input id="customSeq" type="text" spellcheck="false" autocomplete="off">';
+  $("scenarioNote").after(customWrap);
+  var customInput = $("customSeq");
+
+  KEYS.forEach(function (k) {
+    var b = document.createElement("button"); b.type = "button"; b.textContent = k;
+    b.setAttribute("aria-label", "Request key " + k);
+    b.addEventListener("click", function () { manual(k); });
+    $("keys").appendChild(b);
+  });
+
+  function parse(str) { return (str.toUpperCase().match(/[A-J]/g) || []); }
+  function zipf(n) {
+    var w = KEYS.slice(0, 8).map(function (_, i) { return 1 / Math.pow(i + 1, 1.1); });
+    var tot = w.reduce(function (a, b) { return a + b; }, 0), out = [];
+    for (var j = 0; j < n; j++) {
+      var r = Math.random() * tot, i = 0;
+      while (r > w[i]) { r -= w[i]; i++; }
+      out.push(KEYS[i]);
+    }
+    return out;
+  }
+  function current() { return SCENARIOS.filter(function (s) { return s.id === scenarioSel.value; })[0]; }
+
+  function rebuild(upTo) {
+    var cap = +capSel.value;
+    lru = new LRUCache(cap); lfu = new LFUCache(cap);
+    state.results = []; state.lastLRU = state.lastLFU = null;
+    for (var i = 0; i < upTo; i++) apply(state.seq[i]);
+    state.pos = upTo;
+  }
+  function apply(k) {
+    state.lastLRU = lru.access(k); state.lastLFU = lfu.access(k);
+    state.results.push({ lru: state.lastLRU.hit, lfu: state.lastLFU.hit });
+  }
+
+  function loadScenario() {
+    stop();
+    var s = current();
+    state.seq = s.seq ? parse(s.seq) : zipf(30);
+    if (s.id === "custom") customInput.value = state.seq.join(" ");
+    customWrap.hidden = s.id !== "custom";
+    $("scenarioNote").textContent = s.note;
+    rebuild(0);
+    render();
+  }
+
+  function step() {
+    if (state.pos >= state.seq.length) { stop(); return; }
+    apply(state.seq[state.pos]); state.pos++;
+    render(true);
+    if (state.pos >= state.seq.length) stop();
+  }
+  function play() {
+    if (state.timer) { stop(); return; }
+    if (state.pos >= state.seq.length) rebuild(0);
+    $("play").textContent = "Pause";
+    step();
+    state.timer = setInterval(step, +speedSel.value);
+  }
+  function stop() {
+    if (state.timer) clearInterval(state.timer);
+    state.timer = null; $("play").textContent = state.pos >= state.seq.length && state.seq.length ? "Replay" : "Play";
+  }
+  function manual(k) {
+    stop();
+    if (scenarioSel.value !== "custom") { scenarioSel.value = "custom"; customWrap.hidden = false; $("scenarioNote").textContent = current().note; }
+    state.seq = state.seq.slice(0, state.pos).concat([k]);
+    customInput.value = state.seq.join(" ");
+    step();
+  }
+
+  function stats(el, key) {
+    var h = 0, m = 0;
+    state.results.forEach(function (r) { if (r[key]) h++; else m++; });
+    var rate = h + m ? Math.round(h / (h + m) * 100) + "%" : "–";
+    el.innerHTML = '<div class="stat hit"><span class="label">Hits</span><b>' + h + '</b></div>' +
+      '<div class="stat miss"><span class="label">Misses</span><b>' + m + '</b></div>' +
+      '<div class="stat"><span class="label">Hit rate</span><b>' + rate + '</b></div>';
+    return h;
+  }
+  function slots(el, items, last, showFreq, animate) {
+    var cap = +capSel.value, html = "";
+    el.style.setProperty("--cap", cap);
+    for (var i = 0; i < cap; i++) {
+      var it = items[i], cls = "slot";
+      if (it) {
+        cls += " full";
+        if (items.length === cap && i === items.length - 1) cls += " victim";
+        if (animate && last && last.key === it.key) cls += last.hit ? " flash-hit" : " flash-new";
+        html += '<div class="' + cls + '"><span class="key">' + it.key + '</span>' +
+          (showFreq ? '<span class="freq">used ×' + it.f + '</span>' : "") + "</div>";
+      } else html += '<div class="slot" aria-label="empty slot"></div>';
+    }
+    el.innerHTML = html;
+  }
+  function event(el, last, policyWord) {
+    el.className = "event";
+    if (!last) { el.textContent = "Waiting for the first request."; return; }
+    if (last.hit) { el.classList.add("hit"); el.innerHTML = "Hit: <b>" + last.key + "</b> was already cached."; return; }
+    el.classList.add("miss");
+    el.innerHTML = "Miss: loaded <b>" + last.key + "</b>." +
+      (last.evicted ? " Evicted <s>" + last.evicted + "</s>, the " + policyWord + " key." : " A free slot was available.");
+  }
+
+  function render(animate) {
+    var lruP = $("p-lru"), lfuP = $("p-lfu");
+    var hL = stats(lruP.querySelector("[data-stats]"), "lru");
+    var hF = stats(lfuP.querySelector("[data-stats]"), "lfu");
+    slots(lruP.querySelector("[data-slots]"), lru.view(), state.lastLRU, false, animate);
+    slots(lfuP.querySelector("[data-slots]"), lfu.view(), state.lastLFU, true, animate);
+    event(lruP.querySelector("[data-event]"), state.lastLRU, "least recently used");
+    event(lfuP.querySelector("[data-event]"), state.lastLFU, "least frequently used");
+    lruP.classList.toggle("lead", hL > hF); lfuP.classList.toggle("lead", hF > hL);
+
+    var tape = $("tape"), html = "";
+    state.seq.forEach(function (k, i) {
+      var r = state.results[i], cls = "step" + (i < state.pos ? " done" : "") + (i === state.pos ? " cur" : "");
+      html += '<div class="' + cls + '"><span class="k">' + k + '</span><span class="m">' +
+        '<i class="' + (r ? (r.lru ? "h" : "x") : "") + '">' + (r ? (r.lru ? "H" : "M") : "") + '</i>' +
+        '<i class="' + (r ? (r.lfu ? "h" : "x") : "") + '">' + (r ? (r.lfu ? "H" : "M") : "") + '</i></span></div>';
+    });
+    tape.innerHTML = html;
+    var cur = tape.querySelector(".cur") || tape.lastElementChild;
+    if (cur && animate) tape.scrollLeft = Math.max(0, cur.offsetLeft - tape.clientWidth / 2);
+
+    $("stepBtn").disabled = state.pos >= state.seq.length;
+    var v = $("verdict"), s = current(), done = state.seq.length > 0 && state.pos >= state.seq.length;
+    v.hidden = !done || s.id === "custom";
+    if (!v.hidden) {
+      var lead = hL === hF ? "<strong>It's a tie</strong> at " + hL + " hits each." :
+        "<strong>" + (hF > hL ? "LFU" : "LRU") + " wins</strong>, " + Math.max(hL, hF) + " hits to " + Math.min(hL, hF) + ".";
+      v.innerHTML = lead + " " + s.why;
+    }
+    if (!state.timer) $("play").textContent = done ? "Replay" : "Play";
+  }
+
+  scenarioSel.addEventListener("change", loadScenario);
+  capSel.addEventListener("change", function () { stop(); rebuild(state.pos); render(); });
+  speedSel.addEventListener("change", function () { if (state.timer) { stop(); play(); } });
+  $("play").addEventListener("click", play);
+  $("stepBtn").addEventListener("click", function () { stop(); step(); });
+  $("resetBtn").addEventListener("click", function () {
+    stop();
+    if (current().id === "zipf") state.seq = zipf(30);
+    rebuild(0); render();
+  });
+  customInput.addEventListener("input", function () {
+    stop(); state.seq = parse(customInput.value); rebuild(state.seq.length); render();
+  });
+
+  // Open mid-scenario: popular keys are warmed up and the scan is next.
+  loadScenario();
+  rebuild(9); render();
+})();
+</script>
