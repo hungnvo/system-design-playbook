@@ -652,10 +652,10 @@ GET /{code} → CDN/edge → API → Redis → DB → 301/302 redirect</div>
           <div class="sr-note"><b>Key insight</b>Multi-region: accept per-region limits (limit/regions) with async sync, rather than a global synchronous counter.</div>
         </div></details>
 
-        <details class="topic" data-id="p-lru"><summary><span class="t-title">LRU and LFU caches<span class="t-sub">Recency vs frequency eviction · O(1) get/put · in-process and distributed</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+        <details class="topic" data-id="p-lru"><summary><span class="t-title">LRU and LFU caches<span class="t-sub">Recency vs frequency · O(1) get/put</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
           <a class="play-link" href="lru-lfu.html"><span><strong>LRU vs LFU playground</strong>Run both caches on the same requests and watch what each one evicts.</span><span aria-hidden="true">→</span></a>
           <h4>In-process LRU</h4>
-          <p>Hash map from key to node, plus a doubly linked list ordered by recency. Get moves the node to the head; put inserts at the head and evicts the tail when full. Both O(1).</p>
+          <p>Hash map to nodes in a doubly linked list ordered by recency. Hits move to the head; evict the tail.</p>
 <pre><code>class LRUCache:
     def __init__(self, cap):
         self.cap, self.map = cap, {}
@@ -676,18 +676,17 @@ GET /{code} → CDN/edge → API → Redis → DB → 301/302 redirect</div>
         node = Node(key, val); self.map[key] = node; self._push_front(node)
         if len(self.map) &gt; self.cap:
             lru = self.tail.prev; self._unlink(lru); del self.map[lru.key]</code></pre>
-          <p>Thread safety: a single lock is simplest; segment the map into N shards, each with its own lock and list, for throughput. Java: <code>LinkedHashMap(accessOrder=true)</code>; Python: <code>OrderedDict.move_to_end</code>.</p>
+          <p>Concurrency: one lock, or N shards each with its own lock. Built-ins: <code>LinkedHashMap(accessOrder=true)</code>, <code>OrderedDict.move_to_end</code>.</p>
           <h4>LRU vs LFU</h4>
           <div class="tbl"><table>
             <tr><th></th><th>LRU</th><th>LFU</th></tr>
-            <tr><td>Evicts</td><td>Key used longest ago</td><td>Key used least often (ties: oldest)</td></tr>
-            <tr><td>Good at</td><td>Shifting workloads where recent use predicts the next request (sessions, feeds)</td><td>Stable, skewed popularity (product catalog, CDN objects, config)</td></tr>
-            <tr><td>Weak at</td><td>Scans: one pass over cold keys (batch job, crawler) flushes the hot set</td><td>Cache pollution: once-popular keys keep high counts and outstay their use</td></tr>
-            <tr><td>O(1) structure</td><td>Hash map + one recency list</td><td>Hash map + one list per count + <code>min_freq</code></td></tr>
-            <tr><td>Extra memory</td><td>Two pointers per key</td><td>Plus a counter per key</td></tr>
+            <tr><td>Evicts</td><td>Least recently used</td><td>Least often used (ties: oldest)</td></tr>
+            <tr><td>Best for</td><td>Shifting traffic (sessions, feeds)</td><td>Stable, skewed popularity (catalogs, CDN)</td></tr>
+            <tr><td>Fails on</td><td>Scans flush the hot set</td><td>Stale keys keep high counts</td></tr>
+            <tr><td>Structure</td><td>Map + recency list</td><td>Map + list per count + <code>min_freq</code></td></tr>
           </table></div>
           <h4>O(1) LFU</h4>
-          <p>Group keys into buckets by use count; each bucket keeps its keys oldest first, so ties evict the least recent. Track the smallest non-empty count: a hit moves a key up one bucket, and a new key always starts at count 1.</p>
+          <p>Bucket keys by use count, oldest first. A hit moves a key up one bucket; evict the oldest key in <code>min_freq</code>, which resets to 1 on insert.</p>
 <pre><code>class LFUCache:
     def __init__(self, cap):
         self.cap, self.min_freq = cap, 0
@@ -717,19 +716,18 @@ GET /{code} → CDN/edge → API → Redis → DB → 301/302 redirect</div>
         self.buckets[1][key] = None; self.min_freq = 1</code></pre>
           <h4>In practice</h4>
           <ul>
-            <li><strong>Redis</strong>: <code>maxmemory-policy allkeys-lru</code> or <code>allkeys-lfu</code>. Both are approximate (sample a few keys, evict the worst). LFU uses an 8-bit logarithmic counter that decays over time (<code>lfu-log-factor</code>, <code>lfu-decay-time</code>), which fixes pollution.</li>
-            <li><strong>Caffeine</strong> (Java) uses W-TinyLFU: a small LRU window admits new keys, then a Count-Min Sketch of recent frequency (periodically halved) decides whether a candidate beats the main cache's victim. Scan resistant and near-optimal hit rates.</li>
-            <li><strong>Scan-resistant LRU variants</strong>: segmented LRU and 2Q (probation and protected lists; Linux page cache uses active and inactive lists), ARC (ZFS, adapts between recency and frequency), CLOCK with usage counts (Postgres buffer pool).</li>
-            <li>Measure, don't guess: replay a production trace against each policy and compare hit rate at your memory budget.</li>
+            <li><strong>Redis</strong>: <code>allkeys-lru</code> or <code>allkeys-lfu</code>, both sampled; LFU counters decay over time.</li>
+            <li><strong>Caffeine</strong>: W-TinyLFU, an LRU window plus a decaying frequency sketch that gates admission.</li>
+            <li><strong>Scan-resistant</strong>: segmented LRU / 2Q (Linux page cache), ARC (ZFS), CLOCK (Postgres).</li>
+            <li>Pick by replaying a real trace and comparing hit rates.</li>
           </ul>
           <h4>Distributed cache</h4>
           <ul>
-            <li>Consistent hashing with virtual nodes to place keys across cache nodes; client-side or proxy routing (twemproxy, mcrouter).</li>
-            <li>Each node runs its eviction policy locally. Replicate for availability (primary/replica) or accept misses on node loss.</li>
-            <li>Approximate LRU (sample 5 keys, evict the oldest) avoids list overhead, as in Redis.</li>
-            <li>Hot keys, stampede and invalidation: see Fundamentals → Caching.</li>
+            <li>Consistent hashing with virtual nodes; client or proxy routing (mcrouter, twemproxy).</li>
+            <li>Each node evicts locally. Replicate, or accept misses when a node dies.</li>
+            <li>Hot keys, stampedes, invalidation: see Fundamentals → Caching.</li>
           </ul>
-          <div class="sr-note"><b>Key insight</b>Neither pure policy wins: recency adapts to shifting traffic, frequency protects a stable hot set. Production caches combine them (a recency window plus a decaying frequency filter), so start with LRU, name its scan weakness, then propose W-TinyLFU or segmented LRU.</div>
+          <div class="sr-note"><b>Key insight</b>Start with LRU, name its scan weakness, then propose a hybrid (W-TinyLFU or segmented LRU). Production caches mix recency and frequency.</div>
         </div></details>
 
         <details class="topic" data-id="p-kv"><summary><span class="t-title">Distributed key-value store<span class="t-sub">Dynamo-style · partitioning, quorums, repair</span></span><span class="chev"></span></summary><div class="body">
