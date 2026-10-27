@@ -214,9 +214,9 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
       <li><a href="#numbers">Numbers &amp; estimation <em data-count="numbers"></em></a></li>
       <li><a href="#fundamentals">Fundamentals <em data-count="fundamentals"></em></a></li>
       <li><a href="#problems">Classic problems <em data-count="problems"></em></a></li>
-      <li><a href="#ai">AI-era systems <em data-count="ai"></em></a></li>
-      <li><a href="#trends">Current trends <em data-count="trends"></em></a></li>
-      <li><a href="#resources">Further reading <em data-count="resources"></em></a></li>    </ul>
+      <li><a href="#ai">ML and LLM systems <em data-count="ai"></em></a></li>
+      <li><a href="#trends">Architecture patterns <em data-count="trends"></em></a></li>
+    </ul>
     <p class="rail-note">Tick a box when you can explain the topic out loud in two minutes without notes. Progress is saved in this browser only.</p>
     <button class="reset" id="reset" type="button">Reset progress</button>
   </aside>
@@ -225,7 +225,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
     <header class="hero">
       <div class="eyebrow">Updated Oct 2026</div>
       <h1>Design anything, and defend every box you draw</h1>
-      <p class="lede">A step-by-step design process, the numbers worth knowing by heart, the building blocks, 18 classic problems with sketch answers, and AI-era systems (RAG, LLM serving, agents).</p>
+      <p class="lede">A step-by-step design process, the numbers worth knowing by heart, the building blocks, 18 classic problems with sketch answers, ML and LLM systems (RAG, LLM serving, agents), and architecture patterns.</p>
     </header>
 
     <section class="results" id="results" hidden>
@@ -874,7 +874,7 @@ Recipient offline → push notification service (APNs/FCM) + fetch on reconnect<
     <section id="ai" data-sec="ai">
       <div class="sec-head">
         <div class="eyebrow">Part 5</div>
-        <h2>AI-era systems</h2>
+        <h2>ML and LLM systems</h2>
         <p>LLM-powered products reuse all the fundamentals above. The new constraints are GPU cost, token-based throughput, long and variable latency, and non-deterministic output that needs evaluation.</p>
       </div>
       <div class="topics">
@@ -962,7 +962,7 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
     <section id="trends" data-sec="trends">
       <div class="sec-head">
         <div class="eyebrow">Part 6</div>
-        <h2>Current trends</h2>
+        <h2>Architecture patterns</h2>
         <p>Patterns that are common in production today. Use them where they solve the problem in front of you, not for their own sake.</p>
       </div>
       <div class="topics">
@@ -973,24 +973,7 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
         <details class="topic" data-id="t-cell"><summary><span class="t-title">Cell-based architecture<span class="t-sub">Blast-radius control at AWS scale</span></span><span class="chev"></span></summary><div class="body"><p>Split the system into identical, independent cells, each serving a subset of customers. A bad deploy or a poison request takes down one cell, not everyone. Pairs with gradual, cell-by-cell rollouts.</p></div></details>
         <details class="topic" data-id="t-edge"><summary><span class="t-title">Edge compute and serverless<span class="t-sub">Workers, Lambda, edge KV</span></span><span class="chev"></span></summary><div class="body"><p>Run auth, personalization and routing close to users. Serverless removes capacity planning for spiky loads; watch cold starts, connection limits to databases and cost at steady high load.</p></div></details>
         <details class="topic" data-id="t-local"><summary><span class="t-title">Local-first and CRDT sync<span class="t-sub">Offline-capable apps</span></span><span class="chev"></span></summary><div class="body"><p>Data lives on the device and syncs in the background with CRDT merge. Instant UI and offline support; the server becomes a sync and backup peer. Seen in Figma, Linear and Notion-like apps.</p></div></details>
-        <details class="topic" data-id="t-finops"><summary><span class="t-title">Cost awareness (FinOps)<span class="t-sub">Every design has a dominant cost line</span></span><span class="chev"></span></summary><div class="body"><p>Know the dominant cost line (egress, GPU hours, storage tiering, cross-AZ traffic) and one way to cut it. This matters most for AI systems.</p></div></details>
-      </div>
-    </section>
-
-    <!-- RESOURCES -->
-    <section id="resources" data-sec="resources">
-      <div class="sec-head">
-        <div class="eyebrow">Part 7</div>
-        <h2>Further reading</h2>
-      </div>
-      <div class="topics">
-        <details class="topic" data-id="w-res"><summary><span class="t-title">Resources<span class="t-sub">Books, courses, blogs</span></span><span class="chev"></span></summary><div class="body"><ul>
-          <li><em>Designing Data-Intensive Applications</em> (Kleppmann): the single best depth resource.</li>
-          <li><em>System Design Interview</em> Vol. 1 &amp; 2 (Alex Xu) and ByteByteGo: breadth of classic problems.</li>
-          <li><a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/introduction" target="_blank" rel="noopener">Hello Interview</a>: modern problem walkthroughs.</li>
-          <li><em>AI Engineering</em> and <em>Designing Machine Learning Systems</em> (Chip Huyen): for AI systems.</li>
-          <li>Engineering blogs: Netflix, Uber, Discord, Stripe, Cloudflare, AWS Builders' Library.</li>
-        </ul></div></details>
+        <details class="topic" data-id="t-finops"><summary><span class="t-title">Cost awareness (FinOps)<span class="t-sub">Every design has a dominant cost line</span></span><span class="chev"></span></summary><div class="body"><p>Know the dominant cost line (egress, GPU hours, storage tiering, cross-AZ traffic) and one way to cut it. This matters most for LLM systems.</p></div></details>
       </div>
     </section>
 
