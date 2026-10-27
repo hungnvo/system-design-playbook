@@ -16,8 +16,8 @@
   --evict: #a3305f;
   --evict-soft: #f7e4ec;
   --chip: #eef1f6;
-  --n1: #0d7a6b; --n2: #2f6fd0; --n3: #b7791f; --n4: #b83280;
-  --n5: #6b46c1; --n6: #4d7c0f; --n7: #c53030; --n8: #4a5568;
+  --n1: #0d7a6b; --n2: #2f6fd0; --n3: #b7791f; --n4: #6b46c1;
+  --n5: #c53030; --n6: #4d7c0f; --n7: #4a5568; --n8: #0891b2;
   --f-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -26,15 +26,15 @@
   :root:not([data-theme="light"]) {
     --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
     --accent: #4fc9b4; --accent-soft: #15332f; --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938;
-    --n1: #4fc9b4; --n2: #7aa7f0; --n3: #f0b45a; --n4: #ef86b0;
-    --n5: #b39cf0; --n6: #9ccc4f; --n7: #f28b82; --n8: #a0aec0; color-scheme: dark;
+    --n1: #4fc9b4; --n2: #7aa7f0; --n3: #f0b45a; --n4: #b39cf0;
+    --n5: #f28b82; --n6: #9ccc4f; --n7: #a0aec0; --n8: #67d4e8; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
   --accent: #4fc9b4; --accent-soft: #15332f; --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938;
-  --n1: #4fc9b4; --n2: #7aa7f0; --n3: #f0b45a; --n4: #ef86b0;
-  --n5: #b39cf0; --n6: #9ccc4f; --n7: #f28b82; --n8: #a0aec0; color-scheme: dark;
+  --n1: #4fc9b4; --n2: #7aa7f0; --n3: #f0b45a; --n4: #b39cf0;
+  --n5: #f28b82; --n6: #9ccc4f; --n7: #a0aec0; --n8: #67d4e8; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
@@ -87,16 +87,16 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
 .stat.good b { color: var(--accent); }
 
 /* Modulo key grid */
-.grid { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; min-height: 304px; align-content: center; }
-.grid i { aspect-ratio: 1; border-radius: 3px; transition: background .4s; outline: 2px solid transparent; outline-offset: 1px; }
-.grid i.moved { outline-color: var(--evict); }
+.grid { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; min-height: 304px; align-content: center; }
+.grid i { aspect-ratio: 1; border-radius: 3px; transition: background .4s, opacity .4s; }
+/* After a node change, keys that stayed put fade so the moved ones stand out */
+.changed .grid i:not(.moved), .changed .kd:not(.moved) { opacity: .18; }
 
 /* Ring */
 .ring { display: grid; place-items: center; }
 .ring svg { width: 100%; max-width: 304px; height: auto; display: block; }
 .ring .arc { fill: none; stroke-width: 14; transition: stroke .4s; }
-.ring .kd { transition: fill .4s; }
-.ring .kd.moved { stroke: var(--evict); stroke-width: 2.5; }
+.ring .kd { transition: fill .4s, opacity .4s; }
 .ring text { fill: var(--muted); font: 500 11px var(--f-mono); }
 
 /* Load bars */
@@ -148,7 +148,7 @@ code { font: 13px var(--f-mono); background: var(--chip); padding: 1px 5px; bord
   <div class="verdict" id="verdict" aria-live="polite"></div>
 
   <div class="legend">
-    <span><i class="sw" style="border:2px solid var(--evict)"></i>moved on the last change</span>
+    <span>After a change, faded keys stayed put and bright keys moved</span>
     <span><i class="sw" style="background:var(--muted);width:2px"></i>even share (keys ÷ nodes)</span>
   </div>
 
@@ -354,6 +354,7 @@ code { font: 13px var(--f-mono); background: var(--chip); padding: 1px 5px; bord
     ring(pr.querySelector("[data-viz]"), a.tokens, a.ring, L && L.ring);
     loads(pm.querySelector("[data-loads]"), mod.counts);
     loads(pr.querySelector("[data-loads]"), rng.counts);
+    pm.classList.toggle("changed", !!L); pr.classList.toggle("changed", !!L);
     pm.classList.toggle("lead", !!L && count(L.mod) > count(L.ring));
     pr.classList.toggle("lead", !!L && count(L.ring) < count(L.mod));
     verdict(mod, rng);
