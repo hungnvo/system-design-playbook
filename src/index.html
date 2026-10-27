@@ -150,13 +150,6 @@ th { font: 500 11.5px var(--f-mono); letter-spacing: .06em; text-transform: uppe
 td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .topic .tbl { margin: 6px 0 12px; }
 
-/* Latency bars */
-.lat { display: grid; gap: 6px; }
-.lat-row { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr) 84px; gap: 12px; align-items: center; font-size: 14px; }
-.lat-row .bar { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
-.lat-row .bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
-.lat-row .v { font: 500 13px var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
-@media (max-width: 560px) { .lat-row { grid-template-columns: minmax(0, 1fr) 76px; } .lat-row .bar { grid-column: 1 / -1; order: 3; } }
 .scale-note { font-size: 12.5px; color: var(--muted); }
 
 /* Calculator */
@@ -211,7 +204,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
     </div>
     <ul class="toc" id="toc">
       <li><a href="#framework">Design process <em data-count="framework"></em></a></li>
-      <li><a href="#numbers">Numbers &amp; estimation <em data-count="numbers"></em></a></li>
+      <li><a href="#numbers">Estimation <em data-count="numbers"></em></a></li>
       <li><a href="#fundamentals">Fundamentals <em data-count="fundamentals"></em></a></li>
       <li><a href="#problems">Classic problems <em data-count="problems"></em></a></li>
       <li><a href="#ai">ML and LLM systems <em data-count="ai"></em></a></li>
@@ -225,7 +218,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
     <header class="hero">
       <div class="eyebrow">Updated Oct 2026</div>
       <h1>Design anything, and defend every box you draw</h1>
-      <p class="lede">A step-by-step design process, the numbers worth knowing by heart, the building blocks, 19 classic problems with sketch answers, ML and LLM systems (RAG, LLM serving, agents), and architecture patterns.</p>
+      <p class="lede">A step-by-step design process, estimation rules of thumb, the building blocks, 19 classic problems with sketch answers, ML and LLM systems (RAG, LLM serving, agents), and architecture patterns.</p>
     </header>
 
     <section class="results" id="results" hidden>
@@ -305,13 +298,9 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
     <section id="numbers" data-sec="numbers">
       <div class="sec-head">
         <div class="eyebrow">Part 2</div>
-        <h2>Numbers &amp; estimation</h2>
+        <h2>Estimation</h2>
         <p>Use orders of magnitude, not exact figures. What matters is that the reasoning is sound and that you act on the result.</p>
       </div>
-      <h3>Latency, on a log scale</h3>
-      <div class="lat" id="lat"></div>
-      <p class="scale-note">Bar length is log₁₀ of the latency in nanoseconds. Values are rough modern figures; memorize the ratios, not the digits.</p>
-
       <div class="topics">
         <details class="topic" data-id="num-cheats" open><summary><span class="t-title">Conversion shortcuts<span class="t-sub">Do the math in your head in seconds</span></span><span class="chev"></span></summary><div class="body">
           <div class="tbl"><table>
@@ -321,8 +310,6 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
             <tr><td>100 M requests/day</td><td class="num">≈ 1,200 QPS</td></tr>
             <tr><td>1 B requests/day</td><td class="num">≈ 12,000 QPS</td></tr>
             <tr><td>Peak vs average</td><td class="num">2–3× (up to 10× for events)</td></tr>
-            <tr><td>2¹⁰ / 2²⁰ / 2³⁰ / 2⁴⁰ / 2⁵⁰</td><td class="num">KB / MB / GB / TB / PB</td></tr>
-            <tr><td>UUID / bigint / timestamp</td><td class="num">16 B / 8 B / 8 B</td></tr>
             <tr><td>Short text post with metadata</td><td class="num">~1 KB</td></tr>
             <tr><td>Compressed photo</td><td class="num">200 KB – 2 MB</td></tr>
             <tr><td>1 min of 1080p video (~5 Mbps)</td><td class="num">~40 MB</td></tr>
@@ -340,16 +327,6 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
             <tr><td>NIC</td><td class="num">10–25 Gbps ≈ 1–3 GB/s</td></tr>
           </table></div>
           <p>Make the conclusion explicit: "10K writes/s is near one Postgres primary's limit, so I'll shard by user_id or pick a store that partitions natively."</p>
-        </div></details>
-        <details class="topic" data-id="num-avail"><summary><span class="t-title">Availability nines<span class="t-sub">Downtime budgets and why they compound</span></span><span class="chev"></span></summary><div class="body">
-          <div class="tbl"><table>
-            <tr><th>SLA</th><th>Per year</th><th>Per month</th></tr>
-            <tr><td class="num">99%</td><td class="num">3.65 days</td><td class="num">7.3 h</td></tr>
-            <tr><td class="num">99.9%</td><td class="num">8.77 h</td><td class="num">43.8 min</td></tr>
-            <tr><td class="num">99.99%</td><td class="num">52.6 min</td><td class="num">4.38 min</td></tr>
-            <tr><td class="num">99.999%</td><td class="num">5.26 min</td><td class="num">26 s</td></tr>
-          </table></div>
-          <p>Components in series multiply: three 99.9% services in a chain give about 99.7%. Redundant copies in parallel: 1 − (1 − a)ⁿ.</p>
         </div></details>
       </div>
 
@@ -591,6 +568,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
             <li><strong>Bulkheads</strong>: separate pools per dependency so one slow service can't exhaust all threads.</li>
             <li><strong>Load shedding</strong> and graceful degradation: drop low-priority work first, serve stale cache, hide non-critical widgets.</li>
             <li><strong>Hedged requests</strong>: send a second request after the p95 delay to cut tail latency.</li>
+            <li><strong>Availability</strong>: 99.9% ≈ 8.8 h down a year, 99.99% ≈ 53 min. Services in a chain multiply (three at 99.9% ≈ 99.7%); redundant copies give 1 − (1 − a)ⁿ.</li>
             <li>Multi-AZ by default; multi-region active-passive or active-active when the SLA demands it. Cell-based architecture limits blast radius.</li>
           </ul>
         </div></details>
@@ -983,26 +961,6 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
 
 <script>
 (function () {
-  // Latency bars
-  var lat = [
-    ["L1 cache reference", 1, "1 ns"],
-    ["Main memory reference", 100, "100 ns"],
-    ["Compress 1 KB (fast codec)", 2000, "2 µs"],
-    ["Read 1 MB sequentially from RAM", 10000, "10 µs"],
-    ["Random 4 KB read, NVMe SSD", 20000, "20 µs"],
-    ["Round trip in same datacenter", 500000, "0.5 ms"],
-    ["Read 1 MB sequentially, SSD", 1000000, "1 ms"],
-    ["Redis GET over network", 1000000, "~1 ms"],
-    ["HDD seek", 10000000, "10 ms"],
-    ["Round trip US East ↔ West", 70000000, "70 ms"],
-    ["Round trip California ↔ Europe", 150000000, "150 ms"]
-  ];
-  var max = Math.log10(150000000);
-  document.getElementById("lat").innerHTML = lat.map(function (r) {
-    var w = Math.max(3, (Math.log10(r[1]) / max) * 100);
-    return '<div class="lat-row"><span>' + r[0] + '</span><span class="bar"><i style="width:' + w.toFixed(1) + '%"></i></span><span class="v">' + r[2] + '</span></div>';
-  }).join("");
-
   // Calculator
   function fmt(n) {
     if (!isFinite(n)) return "–";

@@ -1,6 +1,6 @@
 # System Design Playbook
 
-A single-page system design reference: a step-by-step design process, numbers worth knowing, core building blocks, 19 classic problems with sketch answers, ML and LLM systems, and architecture patterns. It includes an interactive LRU vs LFU cache playground.
+A single-page system design reference: a step-by-step design process, estimation rules of thumb, core building blocks, 19 classic problems with sketch answers, ML and LLM systems, and architecture patterns. It includes an interactive LRU vs LFU cache playground.
 
 The site is plain HTML, CSS and JavaScript with no framework and no dependencies beyond Google Fonts.
 
