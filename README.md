@@ -1,6 +1,6 @@
 # System Design Playbook
 
-A single-page system design reference: a step-by-step design process, numbers worth knowing, core building blocks, 18 classic problems with sketch answers, AI-era systems, and current trends. It includes an interactive LRU vs LFU cache playground.
+A single-page system design reference: a step-by-step design process, estimation rules of thumb, core building blocks, 16 classic problems with sketch answers, ML and LLM systems, and architecture patterns. It includes interactive playgrounds for LRU vs LFU caching and consistent hashing.
 
 The site is plain HTML, CSS and JavaScript with no framework and no dependencies beyond Google Fonts.
 
@@ -10,6 +10,7 @@ The site is plain HTML, CSS and JavaScript with no framework and no dependencies
 - Topic filter
 - Back-of-envelope estimation calculator
 - LRU vs LFU playground with scenarios, step-through playback and manual requests
+- Consistent hashing playground: modulo vs hash ring, virtual nodes, add and remove nodes
 - Light and dark themes that follow the system setting
 
 ## Project structure
@@ -18,6 +19,7 @@ The site is plain HTML, CSS and JavaScript with no framework and no dependencies
 src/
   index.html      Playbook page source
   lru-lfu.html    LRU vs LFU playground source
+  consistent-hashing.html  Consistent hashing playground source
 scripts/
   build.py        Wraps each source page into a full HTML document in dist/
 dist/             Build output (not committed)
