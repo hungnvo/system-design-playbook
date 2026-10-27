@@ -63,6 +63,11 @@ a { color: var(--accent); }
 .toc a em { font: normal 500 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .toc a.done em { color: var(--accent); }
 @media (max-width: 880px) { .toc { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } }
+.find { display: grid; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 12px var(--f-mono); padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); background: none; color: var(--muted); cursor: pointer; }
+.chip em { font-style: normal; opacity: .7; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .search { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
 .rail-note { font-size: 12.5px; color: var(--muted); margin: 0; }
 .reset { justify-self: start; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 10px; font: 500 12px var(--f-mono); cursor: pointer; }
@@ -196,7 +201,14 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
       <div class="meter" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="meterFill"></i></div>
       <span id="overallText">0 of 0 topics checked off</span>
     </div>
-    <input id="search" class="search" type="search" placeholder="Search topics (e.g. lru, kafka)" aria-label="Search topics" autocomplete="off">
+    <div class="find">
+      <input id="search" class="search" type="search" placeholder="Search topics (e.g. lru, kafka)" aria-label="Search topics" autocomplete="off">
+      <div class="chips" role="group" aria-label="Show only">
+        <button type="button" class="chip" data-filter="core" aria-pressed="false">Core<em></em></button>
+        <button type="button" class="chip" data-filter="todo" aria-pressed="false">To do<em></em></button>
+        <button type="button" class="chip" data-filter="done" aria-pressed="false">Done<em></em></button>
+      </div>
+    </div>
     <ul class="toc" id="toc">
       <li><a href="#framework">Design process <em data-count="framework"></em></a></li>
       <li><a href="#numbers">Numbers &amp; estimation <em data-count="numbers"></em></a></li>
@@ -222,7 +234,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
         <h2 id="resultsTitle" aria-live="polite"></h2>
       </div>
       <div class="topics" id="resultsList"></div>
-      <p class="filter-empty" id="emptyNote" hidden>No topics match that search.</p>
+      <p class="filter-empty" id="emptyNote" hidden>No topics match.</p>
     </section>
 
     <!-- FRAMEWORK -->
@@ -656,26 +668,6 @@ GET /{code} → CDN/edge → API → Redis → DB → 301/302 redirect</div>
           <a class="play-link" href="lru-lfu.html"><span><strong>LRU vs LFU playground</strong>Run both caches on the same requests and watch what each one evicts.</span><span aria-hidden="true">→</span></a>
           <h4>In-process LRU</h4>
           <p>Hash map to nodes in a doubly linked list ordered by recency. Hits move to the head; evict the tail.</p>
-<pre><code>class LRUCache:
-    def __init__(self, cap):
-        self.cap, self.map = cap, {}
-        self.head, self.tail = Node(), Node()      # sentinels
-        self.head.next, self.tail.prev = self.tail, self.head
-
-    def get(self, key):
-        node = self.map.get(key)
-        if not node: return -1
-        self._unlink(node); self._push_front(node)
-        return node.val
-
-    def put(self, key, val):
-        node = self.map.get(key)
-        if node:                                   # update in place
-            node.val = val; self._unlink(node); self._push_front(node)
-            return
-        node = Node(key, val); self.map[key] = node; self._push_front(node)
-        if len(self.map) &gt; self.cap:
-            lru = self.tail.prev; self._unlink(lru); del self.map[lru.key]</code></pre>
           <p>Concurrency: one lock, or N shards each with its own lock. Built-ins: <code>LinkedHashMap(accessOrder=true)</code>, <code>OrderedDict.move_to_end</code>.</p>
           <h4>LRU vs LFU</h4>
           <div class="tbl"><table>
@@ -687,33 +679,6 @@ GET /{code} → CDN/edge → API → Redis → DB → 301/302 redirect</div>
           </table></div>
           <h4>O(1) LFU</h4>
           <p>Bucket keys by use count, oldest first. A hit moves a key up one bucket; evict the oldest key in <code>min_freq</code>, which resets to 1 on insert.</p>
-<pre><code>class LFUCache:
-    def __init__(self, cap):
-        self.cap, self.min_freq = cap, 0
-        self.vals, self.freq = {}, {}                  # key -> value, key -> use count
-        self.buckets = defaultdict(OrderedDict)        # count -> keys, oldest first
-
-    def _touch(self, key):
-        f = self.freq[key]; del self.buckets[f][key]
-        if not self.buckets[f]:
-            del self.buckets[f]
-            if f == self.min_freq: self.min_freq += 1
-        self.freq[key] = f + 1; self.buckets[f + 1][key] = None
-
-    def get(self, key):
-        if key not in self.vals: return -1
-        self._touch(key); return self.vals[key]
-
-    def put(self, key, val):
-        if self.cap == 0: return
-        if key in self.vals:
-            self.vals[key] = val; self._touch(key); return
-        if len(self.vals) &gt;= self.cap:
-            old, _ = self.buckets[self.min_freq].popitem(last=False)
-            if not self.buckets[self.min_freq]: del self.buckets[self.min_freq]
-            del self.vals[old], self.freq[old]
-        self.vals[key], self.freq[key] = val, 1
-        self.buckets[1][key] = None; self.min_freq = 1</code></pre>
           <h4>In practice</h4>
           <ul>
             <li><strong>Redis</strong>: <code>allkeys-lru</code> or <code>allkeys-lfu</code>, both sampled; LFU counters decay over time.</li>
@@ -1118,6 +1083,9 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
     document.getElementById("meterFill").style.width = pct + "%";
     document.querySelector(".overall .meter").setAttribute("aria-valuenow", pct);
     document.getElementById("overallText").textContent = done + " of " + topics.length + " topics checked off (" + pct + "%)";
+    document.querySelector('[data-filter="core"] em').textContent = document.querySelectorAll("details.topic summary .tag.core").length;
+    document.querySelector('[data-filter="todo"] em').textContent = topics.length - done;
+    document.querySelector('[data-filter="done"] em').textContent = done;
     document.querySelectorAll("[data-count]").forEach(function (el) {
       var sec = document.getElementById(el.getAttribute("data-count"));
       var all = sec.querySelectorAll("details.topic"), n = sec.querySelectorAll("details.topic .chk:checked").length;
@@ -1134,7 +1102,7 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
     state = {}; save(); topics.forEach(function (d) { d.querySelector(".chk").checked = false; }); update();
   });
 
-  // Search: matching topics move into a ranked results list at the top of the page
+  // Search and filters: matching topics move into a ranked results list at the top of the page
   var search = document.getElementById("search"), main = document.querySelector("main");
   var results = document.getElementById("results"), resultsList = document.getElementById("resultsList");
   var index = topics.map(function (d, i) {
@@ -1146,7 +1114,7 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
     var s = d.querySelector("summary"); s.insertBefore(tag, s.querySelector(".chev"));
     var sub = d.querySelector(".t-sub");
     return {
-      el: d, home: home, order: i,
+      el: d, home: home, order: i, core: !!d.querySelector("summary .tag.core"),
       title: d.querySelector(".t-title").firstChild.textContent.toLowerCase(),
       sub: sub ? sub.textContent.toLowerCase() : "",
       body: d.querySelector(".body").textContent.toLowerCase()
@@ -1155,6 +1123,7 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
   function esc(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
   // Title hits outrank subtitle hits, which outrank body hits; every term must match somewhere.
   function score(t, terms) {
+    if (!terms.length) return 1;
     var total = 0;
     for (var i = 0; i < terms.length; i++) {
       var q = terms[i], word = new RegExp("(^|[^a-z0-9])" + esc(q));
@@ -1170,6 +1139,12 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
     }
     return total;
   }
+  var filters = { core: false, status: null }; // status: null, "todo" or "done"
+  function passes(t) {
+    if (filters.core && !t.core) return false;
+    if (!filters.status) return true;
+    return t.el.querySelector(".chk").checked === (filters.status === "done");
+  }
   var before = null; // page state captured when a search starts, restored when it ends
   function endSearch() {
     if (!before) return;
@@ -1179,27 +1154,43 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
   }
   function run() {
     var q = search.value.trim().toLowerCase();
-    if (!q) { endSearch(); return; }
+    if (!q && !filters.core && !filters.status) { endSearch(); return; }
     if (!before) {
       before = { y: window.scrollY, open: index.map(function (t) { return t.el.open; }) };
       main.classList.add("searching"); results.hidden = false;
     }
-    var terms = q.split(/\s+/);
-    var hits = index.map(function (t) { return { t: t, s: score(t, terms) }; })
+    var terms = q ? q.split(/\s+/) : [];
+    var hits = index.filter(passes).map(function (t) { return { t: t, s: score(t, terms) }; })
       .filter(function (h) { return h.s > 0; })
       .sort(function (a, b) { return b.s - a.s || a.t.order - b.t.order; });
     index.forEach(function (t) { if (t.el.parentNode === resultsList) t.home.parentNode.insertBefore(t.el, t.home.nextSibling); });
-    hits.forEach(function (h, i) { h.t.el.open = i === 0; resultsList.appendChild(h.t.el); });
-    document.getElementById("resultsTitle").textContent = hits.length
-      ? hits.length + (hits.length === 1 ? " topic matches “" : " topics match “") + search.value.trim() + "”"
-      : "Nothing for “" + search.value.trim() + "”";
+    hits.forEach(function (h, i) { h.t.el.open = !!q && i === 0; resultsList.appendChild(h.t.el); });
+    document.getElementById("resultsTitle").textContent = hits.length + (filters.core ? " core" : "") +
+      (hits.length === 1 ? " topic" : " topics") +
+      (filters.status === "todo" ? " to do" : filters.status === "done" ? " done" : "") +
+      (q ? " matching “" + search.value.trim() + "”" : "");
     document.getElementById("emptyNote").hidden = hits.length > 0;
     // The rail is sticky on wide screens, so keep the results at the top of the viewport.
     if (!matchMedia("(max-width: 880px)").matches) window.scrollTo(0, results.getBoundingClientRect().top + window.scrollY - 24);
   }
+  var chips = Array.prototype.slice.call(document.querySelectorAll(".chip"));
+  function syncChips() {
+    chips.forEach(function (c) {
+      var f = c.getAttribute("data-filter");
+      c.setAttribute("aria-pressed", f === "core" ? filters.core : filters.status === f);
+    });
+  }
+  chips.forEach(function (c) {
+    c.addEventListener("click", function () {
+      var f = c.getAttribute("data-filter");
+      if (f === "core") filters.core = !filters.core;
+      else filters.status = filters.status === f ? null : f;
+      syncChips(); run();
+    });
+  });
   search.addEventListener("input", run);
   search.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") { search.value = ""; endSearch(); }
+    if (e.key === "Escape") { search.value = ""; filters = { core: false, status: null }; syncChips(); endSearch(); }
     else if (e.key === "Enter" && before) {
       var top = resultsList.querySelector("details.topic");
       if (top) { top.open = true; top.scrollIntoView({ block: "start" }); top.querySelector("summary").focus(); }
