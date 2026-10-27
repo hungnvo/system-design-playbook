@@ -470,6 +470,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
           </ul>
         </div></details>
         <details class="topic" data-id="f-shard"><summary><span class="t-title">Partitioning and sharding<span class="t-sub">Shard keys, consistent hashing, hot spots</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
+          <a class="play-link" href="consistent-hashing.html"><span><strong>Consistent hashing playground</strong>Add and remove nodes and count how many keys move with modulo vs a hash ring.</span><span aria-hidden="true">→</span></a>
           <ul>
             <li><strong>Range</strong> partitioning keeps scans efficient but creates hot spots on sequential keys (timestamps).</li>
             <li><strong>Hash</strong> partitioning spreads load evenly but loses range queries.</li>

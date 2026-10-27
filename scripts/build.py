@@ -1,6 +1,6 @@
 """Build the static site from the page sources.
 
-Usage: python3 scripts/build.py  ->  writes dist/index.html and dist/lru-lfu.html
+Usage: python3 scripts/build.py  ->  writes each page in PAGES to dist/
 
 Each file in src/ is a page fragment (title, styles, markup, script) without
 <html>/<head>/<body>. This script wraps each one into a full HTML document so
@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 OUT = ROOT / "dist"
 
-PAGES = ["index.html", "lru-lfu.html"]
+PAGES = ["index.html", "lru-lfu.html", "consistent-hashing.html"]
 
 HEAD = """<!doctype html>
 <html lang="en">
@@ -43,9 +43,9 @@ def main() -> None:
     OUT.mkdir(exist_ok=True)
     for name in PAGES:
         html = (SRC / name).read_text(encoding="utf-8")
-        if name == "lru-lfu.html":
-            html = html.replace('<span class="label">Cache eviction playground</span>',
-                                BACK_LINK + '<span class="label">Cache eviction playground</span>', 1)
+        if name != "index.html":
+            # Playgrounds get a link back to the playbook above their header label
+            html = html.replace('<span class="label">', BACK_LINK + '<span class="label">', 1)
         (OUT / name).write_text(wrap(html), encoding="utf-8")
         print(f"wrote dist/{name}")
 

@@ -1,0 +1,377 @@
+<title>Consistent Hashing Playground</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: controls on top, modulo and hash-ring panels side by side, short explainer below. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #5a6475;
+  --line: #d9dee7;
+  --accent: #0d7a6b;
+  --accent-soft: #dff1ec;
+  --evict: #a3305f;
+  --evict-soft: #f7e4ec;
+  --chip: #eef1f6;
+  --n1: #0d7a6b; --n2: #2f6fd0; --n3: #b7791f; --n4: #b83280;
+  --n5: #6b46c1; --n6: #4d7c0f; --n7: #c53030; --n8: #4a5568;
+  --f-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+    --accent: #4fc9b4; --accent-soft: #15332f; --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938;
+    --n1: #4fc9b4; --n2: #7aa7f0; --n3: #f0b45a; --n4: #ef86b0;
+    --n5: #b39cf0; --n6: #9ccc4f; --n7: #f28b82; --n8: #a0aec0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+  --accent: #4fc9b4; --accent-soft: #15332f; --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938;
+  --n1: #4fc9b4; --n2: #7aa7f0; --n3: #f0b45a; --n4: #ef86b0;
+  --n5: #b39cf0; --n6: #9ccc4f; --n7: #f28b82; --n8: #a0aec0; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px; display: grid; gap: 24px; }
+header { display: grid; gap: 8px; }
+h1 { font: 800 clamp(28px, 4.5vw, 40px)/1.05 var(--f-display); letter-spacing: -0.02em; margin: 0; }
+h2 { font: 800 20px/1.2 var(--f-display); margin: 0; }
+h3 { font: 600 16px/1.3 var(--f-display); margin: 0 0 6px; }
+p { margin: 0; max-width: 70ch; }
+.lede { color: var(--muted); font-size: 16px; }
+.label { font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field.grow { flex: 1 1 260px; }
+select { font: 500 14px var(--f-body); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.vval { font: 600 13px var(--f-mono); color: var(--ink); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: 600 14px var(--f-body); border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+.nodes { display: flex; flex-wrap: wrap; gap: 6px; }
+.node { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px 5px 10px; font: 600 14px var(--f-mono); }
+.node .dot { width: 10px; height: 10px; border-radius: 50%; }
+.node .x { color: var(--muted); font-weight: 500; }
+.node:hover .x { color: var(--evict); }
+
+.verdict { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 14px 16px; font-size: 15px; }
+.verdict strong { font-weight: 600; }
+
+/* Panels */
+.panels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 760px) { .panels { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; min-width: 0; align-content: start; }
+.panel.lead { border-color: var(--accent); }
+.p-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.p-head .rule { font: 500 12.5px var(--f-mono); color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
+.stat b { display: block; font: 600 22px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.stat.bad b { color: var(--evict); }
+.stat.good b { color: var(--accent); }
+
+/* Modulo key grid */
+.grid { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; min-height: 304px; align-content: center; }
+.grid i { aspect-ratio: 1; border-radius: 3px; transition: background .4s; outline: 2px solid transparent; outline-offset: 1px; }
+.grid i.moved { outline-color: var(--evict); }
+
+/* Ring */
+.ring { display: grid; place-items: center; }
+.ring svg { width: 100%; max-width: 304px; height: auto; display: block; }
+.ring .arc { fill: none; stroke-width: 14; transition: stroke .4s; }
+.ring .kd { transition: fill .4s; }
+.ring .kd.moved { stroke: var(--evict); stroke-width: 2.5; }
+.ring text { fill: var(--muted); font: 500 11px var(--f-mono); }
+
+/* Load bars */
+.loads { display: grid; gap: 5px; }
+.load { display: grid; grid-template-columns: 22px minmax(0, 1fr) 34px; gap: 8px; align-items: center; font: 500 12.5px var(--f-mono); }
+.load .bar { position: relative; height: 10px; background: var(--chip); border-radius: 99px; }
+.load .bar i { display: block; height: 100%; border-radius: 99px; transition: width .4s; }
+.load .bar u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted); opacity: .7; }
+.load span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.legend { font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* Explainer */
+.explain { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.explain > div { min-width: 0; }
+.explain ul { margin: 6px 0 0; padding-left: 18px; }
+.explain li { margin: 3px 0; }
+code { font: 13px var(--f-mono); background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="label">Partitioning playground</span>
+    <h1>Modulo vs consistent hashing</h1>
+    <p class="lede">The same keys are spread across the same nodes two ways. Add or remove a node and count how many keys have to move. Then raise the virtual nodes and watch the ring's load even out.</p>
+  </header>
+
+  <div class="controls">
+    <div class="field grow">
+      <span class="label">Nodes (click one to remove it)</span>
+      <div class="nodes" id="nodes"></div>
+    </div>
+    <div class="btns">
+      <button id="addBtn" class="primary" type="button">Add node</button>
+      <button id="resetBtn" type="button">Reset</button>
+    </div>
+    <div class="field grow">
+      <label class="label" for="vnodes">Virtual nodes per node (ring only): <span class="vval" id="vval"></span></label>
+      <input id="vnodes" type="range" min="0" max="6" step="1" value="0">
+    </div>
+    <div class="field">
+      <label class="label" for="keyCount">Keys</label>
+      <select id="keyCount"><option>60</option><option selected>120</option><option>240</option></select>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict" aria-live="polite"></div>
+
+  <div class="legend">
+    <span><i class="sw" style="border:2px solid var(--evict)"></i>moved on the last change</span>
+    <span><i class="sw" style="background:var(--muted);width:2px"></i>even share (keys ÷ nodes)</span>
+  </div>
+
+  <div class="panels">
+    <section class="panel" id="p-mod">
+      <div class="p-head"><h2>Modulo</h2><span class="rule">node = hash(key) % N</span></div>
+      <div class="stats" data-stats></div>
+      <div class="grid" data-viz aria-label="Keys colored by the node that owns them"></div>
+      <div class="loads" data-loads></div>
+    </section>
+    <section class="panel" id="p-ring">
+      <div class="p-head"><h2>Hash ring</h2><span class="rule">next node clockwise from hash(key)</span></div>
+      <div class="stats" data-stats></div>
+      <div class="ring" data-viz></div>
+      <div class="loads" data-loads></div>
+    </section>
+  </div>
+
+  <div class="explain">
+    <div>
+      <h3>Why modulo breaks</h3>
+      <p>Every key's node depends on N. Change N from 4 to 5 and a key stays put only if <code>h % 4 == h % 5</code>, which is about 1 in 5. So roughly 80% of keys move, and a cache cluster loses most of its hits at once.</p>
+      <ul>
+        <li>Fine when N never changes, or when you can afford a full rebalance.</li>
+        <li>Fixed slots fix it: hash into many slots (Redis Cluster uses 16,384) and move whole slots between nodes.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>How the ring works</h3>
+      <p>Hash nodes and keys onto the same circle. A key belongs to the first node clockwise from it. Adding a node takes over one stretch of the ring, so only about 1/N of keys move, and only to the new node.</p>
+      <ul>
+        <li>With one point per node the stretches are uneven, so some nodes get several times their share.</li>
+        <li>Virtual nodes give each node many points, which evens out load and spreads a removed node's keys over all the others. Cassandra uses 16 tokens per node by default.</li>
+        <li>Alternatives: rendezvous hashing (highest score wins, no ring) and jump hash (no memory, but nodes can only be added or removed at the end).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  var VNODES = [1, 2, 4, 8, 16, 32, 64];
+  var START = ["A", "B", "C", "D"];
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { nodes: START.slice(), keys: [], last: null };
+
+  // FNV-1a with a murmur3 finalizer: cheap, deterministic, well spread
+  function hash(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+    return h >>> 0;
+  }
+  function color(n) { return "var(--n" + (NAMES.indexOf(n) + 1) + ")"; }
+  function vnodes() { return VNODES[+$("vnodes").value]; }
+
+  function makeKeys() {
+    state.keys = [];
+    for (var i = 0; i < +$("keyCount").value; i++) {
+      var h = hash("user:" + i);
+      state.keys.push({ h: h, p: h / 4294967296 });
+    }
+  }
+  function tokens(nodes, v) {
+    var t = [];
+    nodes.forEach(function (n) {
+      for (var i = 0; i < v; i++) t.push({ p: hash(n + "#" + i) / 4294967296, node: n });
+    });
+    return t.sort(function (a, b) { return a.p - b.p; });
+  }
+  function ringOwner(t, p) {
+    var lo = 0, hi = t.length;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (t[mid].p < p) lo = mid + 1; else hi = mid; }
+    return t[lo === t.length ? 0 : lo].node;
+  }
+  function assign(nodes) {
+    var t = tokens(nodes, vnodes());
+    return {
+      tokens: t,
+      mod: state.keys.map(function (k) { return nodes[k.h % nodes.length]; }),
+      ring: state.keys.map(function (k) { return ringOwner(t, k.p); })
+    };
+  }
+  function moved(a, b) { var m = []; for (var i = 0; i < a.length; i++) m.push(a[i] !== b[i]); return m; }
+  function count(m) { return m.filter(Boolean).length; }
+  function busiest(owners) {
+    var c = {}; state.nodes.forEach(function (n) { c[n] = 0; });
+    owners.forEach(function (n) { c[n]++; });
+    var max = Math.max.apply(null, state.nodes.map(function (n) { return c[n]; }));
+    return { counts: c, ratio: max / (owners.length / state.nodes.length) };
+  }
+  function pct(n) { return Math.round(n / state.keys.length * 100) + "%"; }
+
+  // Applies a node change and records what moved under each scheme
+  function change(nodes, what) {
+    var before = assign(state.nodes);
+    state.nodes = nodes;
+    var after = assign(state.nodes);
+    state.last = { what: what, mod: moved(before.mod, after.mod), ring: moved(before.ring, after.ring) };
+    render(after);
+  }
+
+  function renderNodes() {
+    var box = $("nodes"); box.innerHTML = "";
+    state.nodes.forEach(function (n) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "node";
+      b.innerHTML = '<i class="dot" style="background:' + color(n) + '"></i>' + n + '<span class="x" aria-hidden="true">×</span>';
+      b.setAttribute("aria-label", "Remove node " + n);
+      b.disabled = state.nodes.length === 1;
+      b.addEventListener("click", function () {
+        change(state.nodes.filter(function (x) { return x !== n; }), { type: "remove", node: n, from: state.nodes.length });
+      });
+      box.appendChild(b);
+    });
+    $("addBtn").disabled = state.nodes.length === NAMES.length;
+  }
+
+  function stats(el, movedList, ratio) {
+    var m = movedList ? count(movedList) : null;
+    var ideal = state.last ? 1 / Math.max(state.last.what.from, state.nodes.length) : 0;
+    var heavy = m !== null && m / state.keys.length > ideal * 1.6;
+    el.innerHTML =
+      '<div class="stat' + (m === null ? "" : heavy ? " bad" : " good") + '"><b>' + (m === null ? "–" : m) + '</b>keys moved</div>' +
+      '<div class="stat' + (m === null ? "" : heavy ? " bad" : " good") + '"><b>' + (m === null ? "–" : pct(m)) + '</b>of all keys</div>' +
+      '<div class="stat' + (ratio > 1.5 ? " bad" : "") + '"><b>' + ratio.toFixed(1) + '×</b>busiest vs even</div>';
+  }
+
+  function loads(el, counts) {
+    var even = state.keys.length / state.nodes.length;
+    var max = Math.max(even * 2, Math.max.apply(null, state.nodes.map(function (n) { return counts[n]; })));
+    el.innerHTML = state.nodes.map(function (n) {
+      return '<div class="load"><span style="color:' + color(n) + '">' + n + '</span><span class="bar"><i style="width:' +
+        (counts[n] / max * 100).toFixed(1) + '%;background:' + color(n) + '"></i><u style="left:' + (even / max * 100).toFixed(1) +
+        '%"></u></span><span>' + counts[n] + '</span></div>';
+    }).join("");
+  }
+
+  function grid(el, owners, mv) {
+    if (el.children.length !== owners.length) {
+      el.innerHTML = owners.map(function () { return "<i></i>"; }).join("");
+    }
+    owners.forEach(function (n, i) {
+      var c = el.children[i];
+      c.style.background = color(n);
+      c.classList.toggle("moved", !!(mv && mv[i]));
+    });
+  }
+
+  function arc(a0, a1, r) {
+    var x0 = 160 + r * Math.cos(a0), y0 = 160 + r * Math.sin(a0);
+    var x1 = 160 + r * Math.cos(a1), y1 = 160 + r * Math.sin(a1);
+    return "M" + x0.toFixed(2) + " " + y0.toFixed(2) + "A" + r + " " + r + " 0 " + (a1 - a0 > Math.PI ? 1 : 0) + " 1 " + x1.toFixed(2) + " " + y1.toFixed(2);
+  }
+  function ang(p) { return p * 2 * Math.PI - Math.PI / 2; }
+  function ring(el, t, owners, mv) {
+    var s = '<svg viewBox="0 0 320 320" role="img" aria-label="Hash ring: arcs show which node owns each stretch, dots are keys">';
+    if (t.length === 1) s += '<circle class="arc" cx="160" cy="160" r="136" style="stroke:' + color(t[0].node) + '"/>';
+    else t.forEach(function (tok, i) {
+      var prev = t[(i - 1 + t.length) % t.length].p, cur = tok.p;
+      if (cur <= prev) cur += 1;
+      s += '<path class="arc" d="' + arc(ang(prev), ang(cur), 136) + '" style="stroke:' + color(tok.node) + '"/>';
+    });
+    if (vnodes() <= 4) t.forEach(function (tok) {
+      var a = ang(tok.p);
+      s += '<text x="' + (160 + 152 * Math.cos(a)).toFixed(1) + '" y="' + (160 + 152 * Math.sin(a) + 4).toFixed(1) + '" text-anchor="middle">' + tok.node + '</text>';
+    });
+    state.keys.forEach(function (k, i) {
+      var a = ang(k.p);
+      s += '<circle class="kd' + (mv && mv[i] ? " moved" : "") + '" cx="' + (160 + 118 * Math.cos(a)).toFixed(2) + '" cy="' +
+        (160 + 118 * Math.sin(a)).toFixed(2) + '" r="3.2" style="fill:' + color(owners[i]) + '"/>';
+    });
+    el.innerHTML = s + '<text x="160" y="164" text-anchor="middle">' + t.length + (t.length === 1 ? " point" : " points") + '</text></svg>';
+  }
+
+  function verdict(mod, ring) {
+    var v = $("verdict"), L = state.last;
+    if (!L) {
+      v.innerHTML = "Both schemes start with " + state.nodes.length + " nodes and " + state.keys.length +
+        " keys. <strong>Add a node, or click one to remove it,</strong> and compare how many keys move." +
+        " With " + vnodes() + (vnodes() === 1 ? " point" : " points") + " per node, the ring's busiest node holds " +
+        ring.ratio.toFixed(1) + "× an even share.";
+      return;
+    }
+    var mm = count(L.mod), rm = count(L.ring), n = Math.max(L.what.from, state.nodes.length);
+    var head = L.what.type === "add" ? "Adding node " + L.what.node : "Removing node " + L.what.node;
+    var tail = L.what.type === "remove" ? " On the ring only " + L.what.node + "'s own keys moved." : " On the ring every moved key went to " + L.what.node + ".";
+    v.innerHTML = "<strong>" + head + ":</strong> modulo moved " + mm + " of " + state.keys.length + " keys (" + pct(mm) +
+      "); the ring moved " + rm + " (" + pct(rm) + "). An even rebalance moves about 1/" + n + " = " +
+      Math.round(100 / n) + "%." + tail + (ring.ratio > 1.5 ? " The ring is lopsided, though: raise the virtual nodes." : "");
+  }
+
+  function render(a) {
+    a = a || assign(state.nodes);
+    var L = state.last, mod = busiest(a.mod), rng = busiest(a.ring);
+    $("vval").textContent = vnodes();
+    renderNodes();
+    var pm = $("p-mod"), pr = $("p-ring");
+    stats(pm.querySelector("[data-stats]"), L && L.mod, mod.ratio);
+    stats(pr.querySelector("[data-stats]"), L && L.ring, rng.ratio);
+    grid(pm.querySelector("[data-viz]"), a.mod, L && L.mod);
+    ring(pr.querySelector("[data-viz]"), a.tokens, a.ring, L && L.ring);
+    loads(pm.querySelector("[data-loads]"), mod.counts);
+    loads(pr.querySelector("[data-loads]"), rng.counts);
+    pm.classList.toggle("lead", !!L && count(L.mod) > count(L.ring));
+    pr.classList.toggle("lead", !!L && count(L.ring) < count(L.mod));
+    verdict(mod, rng);
+  }
+
+  $("addBtn").addEventListener("click", function () {
+    var n = NAMES.filter(function (x) { return state.nodes.indexOf(x) === -1; })[0];
+    var next = NAMES.filter(function (x) { return x === n || state.nodes.indexOf(x) !== -1; });
+    change(next, { type: "add", node: n, from: state.nodes.length });
+  });
+  $("resetBtn").addEventListener("click", function () {
+    state.nodes = START.slice(); state.last = null; $("vnodes").value = 0; render();
+  });
+  // Changing virtual nodes or key count is not a node change, so clear the "moved" marks
+  $("vnodes").addEventListener("input", function () { state.last = null; render(); });
+  $("keyCount").addEventListener("change", function () { state.last = null; makeKeys(); render(); });
+
+  makeKeys();
+  render();
+})();
+</script>
