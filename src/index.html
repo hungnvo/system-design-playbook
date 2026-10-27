@@ -179,6 +179,10 @@ td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-s
 .diagram #arr path { fill: var(--muted); }
 
 .filter-empty { color: var(--muted); font-style: italic; }
+main.searching > :not(.results) { display: none; }
+.results .eyebrow kbd { font-size: 11px; text-transform: none; letter-spacing: 0; }
+.tag.sec { display: none; }
+.results .tag.sec { display: inline; }
 .prob-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -192,7 +196,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
       <div class="meter" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="meterFill"></i></div>
       <span id="overallText">0 of 0 topics checked off</span>
     </div>
-    <input id="search" class="search" type="search" placeholder="Filter topics (e.g. kafka, cache)" aria-label="Filter topics">
+    <input id="search" class="search" type="search" placeholder="Search topics (e.g. lru, kafka)" aria-label="Search topics" autocomplete="off">
     <ul class="toc" id="toc">
       <li><a href="#framework">Design process <em data-count="framework"></em></a></li>
       <li><a href="#numbers">Numbers &amp; estimation <em data-count="numbers"></em></a></li>
@@ -211,6 +215,15 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
       <h1>Design anything, and defend every box you draw</h1>
       <p class="lede">A step-by-step design process, the numbers worth knowing by heart, the building blocks, 18 classic problems with sketch answers, and AI-era systems (RAG, LLM serving, agents).</p>
     </header>
+
+    <section class="results" id="results" hidden>
+      <div class="sec-head">
+        <div class="eyebrow">Search · <kbd>Enter</kbd> opens the top match · <kbd>Esc</kbd> clears</div>
+        <h2 id="resultsTitle" aria-live="polite"></h2>
+      </div>
+      <div class="topics" id="resultsList"></div>
+      <p class="filter-empty" id="emptyNote" hidden>No topics match that search.</p>
+    </section>
 
     <!-- FRAMEWORK -->
     <section id="framework" data-sec="framework">
@@ -843,7 +856,6 @@ Recipient offline → push notification service (APNs/FCM) + fetch on reconnect<
           </ul>
         </div></details>
       </div>
-      <p class="filter-empty" id="emptyNote" hidden>No topics match that filter.</p>
     </section>
 
     <!-- AI -->
@@ -1075,16 +1087,76 @@ Query:   question → (rewrite) → hybrid search: BM25 + vector ANN → rerank 
     state = {}; save(); topics.forEach(function (d) { d.querySelector(".chk").checked = false; }); update();
   });
 
-  // Filter
-  var search = document.getElementById("search");
-  search.addEventListener("input", function () {
-    var q = search.value.trim().toLowerCase(), shown = 0;
-    topics.forEach(function (d) {
-      var hit = !q || d.textContent.toLowerCase().indexOf(q) !== -1;
-      d.hidden = !hit; if (hit) shown++;
-      if (q && hit) d.open = true;
-    });
-    document.getElementById("emptyNote").hidden = shown > 0;
+  // Search: matching topics move into a ranked results list at the top of the page
+  var search = document.getElementById("search"), main = document.querySelector("main");
+  var results = document.getElementById("results"), resultsList = document.getElementById("resultsList");
+  var index = topics.map(function (d, i) {
+    var home = document.createComment("");
+    d.parentNode.insertBefore(home, d);
+    var sec = d.closest("section").querySelector("h2").textContent;
+    var tag = document.createElement("span");
+    tag.className = "tag sec"; tag.textContent = sec;
+    var s = d.querySelector("summary"); s.insertBefore(tag, s.querySelector(".chev"));
+    var sub = d.querySelector(".t-sub");
+    return {
+      el: d, home: home, order: i,
+      title: d.querySelector(".t-title").firstChild.textContent.toLowerCase(),
+      sub: sub ? sub.textContent.toLowerCase() : "",
+      body: d.querySelector(".body").textContent.toLowerCase()
+    };
+  });
+  function esc(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  // Title hits outrank subtitle hits, which outrank body hits; every term must match somewhere.
+  function score(t, terms) {
+    var total = 0;
+    for (var i = 0; i < terms.length; i++) {
+      var q = terms[i], word = new RegExp("(^|[^a-z0-9])" + esc(q));
+      if (word.test(t.title)) total += 100;
+      else if (t.title.indexOf(q) !== -1) total += 60;
+      else if (word.test(t.sub)) total += 40;
+      else if (t.sub.indexOf(q) !== -1) total += 30;
+      else {
+        var n = t.body.split(q).length - 1;
+        if (!n) return 0;
+        total += 5 + Math.min(n, 10);
+      }
+    }
+    return total;
+  }
+  var before = null; // page state captured when a search starts, restored when it ends
+  function endSearch() {
+    if (!before) return;
+    index.forEach(function (t) { t.home.parentNode.insertBefore(t.el, t.home.nextSibling); t.el.open = before.open[t.order]; });
+    main.classList.remove("searching"); results.hidden = true;
+    window.scrollTo(0, before.y); before = null;
+  }
+  function run() {
+    var q = search.value.trim().toLowerCase();
+    if (!q) { endSearch(); return; }
+    if (!before) {
+      before = { y: window.scrollY, open: index.map(function (t) { return t.el.open; }) };
+      main.classList.add("searching"); results.hidden = false;
+    }
+    var terms = q.split(/\s+/);
+    var hits = index.map(function (t) { return { t: t, s: score(t, terms) }; })
+      .filter(function (h) { return h.s > 0; })
+      .sort(function (a, b) { return b.s - a.s || a.t.order - b.t.order; });
+    index.forEach(function (t) { if (t.el.parentNode === resultsList) t.home.parentNode.insertBefore(t.el, t.home.nextSibling); });
+    hits.forEach(function (h, i) { h.t.el.open = i === 0; resultsList.appendChild(h.t.el); });
+    document.getElementById("resultsTitle").textContent = hits.length
+      ? hits.length + (hits.length === 1 ? " topic matches “" : " topics match “") + search.value.trim() + "”"
+      : "Nothing for “" + search.value.trim() + "”";
+    document.getElementById("emptyNote").hidden = hits.length > 0;
+    // The rail is sticky on wide screens, so keep the results at the top of the viewport.
+    if (!matchMedia("(max-width: 880px)").matches) window.scrollTo(0, results.getBoundingClientRect().top + window.scrollY - 24);
+  }
+  search.addEventListener("input", run);
+  search.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { search.value = ""; endSearch(); }
+    else if (e.key === "Enter" && before) {
+      var top = resultsList.querySelector("details.topic");
+      if (top) { top.open = true; top.scrollIntoView({ block: "start" }); top.querySelector("summary").focus(); }
+    }
   });
 })();
 </script>
