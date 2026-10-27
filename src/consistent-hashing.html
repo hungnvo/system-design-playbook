@@ -90,7 +90,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
 .grid { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; min-height: 304px; align-content: center; }
 .grid i { aspect-ratio: 1; border-radius: 3px; transition: background .4s, opacity .4s; }
 /* After a node change, keys that stayed put fade so the moved ones stand out */
-.changed .grid i:not(.moved), .changed .kd:not(.moved) { opacity: .18; }
+.changed .grid i:not(.moved), .changed .kd:not(.moved) { opacity: .4; }
 
 /* Ring */
 .ring { display: grid; place-items: center; }
@@ -148,7 +148,7 @@ code { font: 13px var(--f-mono); background: var(--chip); padding: 1px 5px; bord
   <div class="verdict" id="verdict" aria-live="polite"></div>
 
   <div class="legend">
-    <span>After a change, faded keys stayed put and bright keys moved</span>
+    <span>After you add or remove a node: <strong>bright</strong> keys moved to a different node, <strong>faded</strong> keys stayed where they were</span>
     <span><i class="sw" style="background:var(--muted);width:2px"></i>even share (keys ÷ nodes)</span>
   </div>
 
@@ -273,8 +273,8 @@ code { font: 13px var(--f-mono); background: var(--chip); padding: 1px 5px; bord
     var ideal = state.last ? 1 / Math.max(state.last.what.from, state.nodes.length) : 0;
     var heavy = m !== null && m / state.keys.length > ideal * 1.6;
     el.innerHTML =
-      '<div class="stat' + (m === null ? "" : heavy ? " bad" : " good") + '"><b>' + (m === null ? "–" : m) + '</b>keys moved</div>' +
-      '<div class="stat' + (m === null ? "" : heavy ? " bad" : " good") + '"><b>' + (m === null ? "–" : pct(m)) + '</b>of all keys</div>' +
+      '<div class="stat' + (m === null ? "" : heavy ? " bad" : " good") + '"><b>' + (m === null ? "–" : m) + '</b>moved · bright' + (m === null ? "" : " (" + pct(m) + ")") + '</div>' +
+      '<div class="stat"><b>' + (m === null ? "–" : state.keys.length - m) + '</b>stayed · faded</div>' +
       '<div class="stat' + (ratio > 1.5 ? " bad" : "") + '"><b>' + ratio.toFixed(1) + '×</b>busiest vs even</div>';
   }
 
