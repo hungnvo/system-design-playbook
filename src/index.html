@@ -617,6 +617,7 @@ GET /{code} → CDN/edge → API → Redis → DB → 301/302 redirect</div>
         <details class="topic" data-id="p-rate"><summary><span class="t-title">Distributed rate limiter<span class="t-sub">API gateway · shared counters, low latency</span></span><span class="tag core">core</span><span class="chev"></span></summary><div class="body">
           <h4>Clarify</h4><p>Limit per user, IP or API key? Hard or soft limit? Added latency budget (&lt; 1 ms)? Fail open or closed?</p>
           <h4>Algorithms</h4>
+          <a class="play-link" href="rate-limiter.html"><span><strong>Rate limiting playground</strong>Send the same requests through a fixed window and a token bucket and watch the boundary burst slip through.</span><span aria-hidden="true">→</span></a>
           <div class="tbl"><table>
             <tr><th>Algorithm</th><th>Behavior</th><th>Trade-off</th></tr>
             <tr><td>Token bucket</td><td>Refill r tokens/s up to capacity b</td><td>Allows bursts; most common</td></tr>
