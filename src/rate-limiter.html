@@ -1,0 +1,544 @@
+<title>Rate Limiting Playground</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control bar and request timeline on top, fixed window and token bucket panels side by side, collapsible explainers below. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #5a6475;
+  --line: #d9dee7;
+  --accent: #0d7a6b;
+  --accent-soft: #dff1ec;
+  --miss: #9a5b00;
+  --miss-soft: #fbefd9;
+  --evict: #a3305f;
+  --evict-soft: #f7e4ec;
+  --chip: #eef1f6;
+  --f-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+    --accent: #4fc9b4; --accent-soft: #15332f; --miss: #f0b45a; --miss-soft: #3a2c14;
+    --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #181e27; --ink: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+  --accent: #4fc9b4; --accent-soft: #15332f; --miss: #f0b45a; --miss-soft: #3a2c14;
+  --evict: #ef86b0; --evict-soft: #3a1d2a; --chip: #212938; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px; display: grid; gap: 24px; }
+header { display: grid; gap: 8px; }
+h1 { font: 800 clamp(28px, 4.5vw, 40px)/1.05 var(--f-display); letter-spacing: -0.02em; margin: 0; }
+h2 { font: 800 20px/1.2 var(--f-display); margin: 0; }
+h3 { font: 600 16px/1.3 var(--f-display); margin: 0 0 6px; }
+p { margin: 0; max-width: 70ch; }
+.lede { color: var(--muted); font-size: 16px; }
+.label { font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field.grow { flex: 1 1 240px; }
+select { font: 500 14px var(--f-body); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: 600 14px var(--f-body); border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+.scenario-note { font-size: 13.5px; color: var(--muted); flex-basis: 100%; }
+
+/* Request timeline: one chip per request, a dashed marker wherever a fixed window resets */
+.tape-box { display: grid; gap: 8px; }
+.tape { display: flex; gap: 6px; overflow-x: auto; padding: 18px 2px 8px; }
+.step { flex: none; display: grid; gap: 3px; justify-items: center; }
+.step .k { min-width: 46px; height: 34px; padding: 0 4px; display: grid; place-items: center; border-radius: 8px; background: var(--chip); font: 600 13px var(--f-mono); color: var(--muted); border: 2px solid transparent; }
+.step.done .k { color: var(--ink); }
+.step.cur .k { border-color: var(--accent); color: var(--ink); background: var(--surface); }
+.step .m { width: 46px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.step .m i { height: 16px; border-radius: 3px; font: normal 700 11px/16px var(--f-mono); text-align: center; background: var(--chip); color: transparent; }
+.step .m i.ok { background: var(--accent-soft); color: var(--accent); }
+.step .m i.no { background: var(--evict-soft); color: var(--evict); }
+.wmark { flex: none; position: relative; width: 2px; margin: 0 4px; border-left: 2px dashed var(--miss); }
+.wmark span { position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font: 600 10.5px var(--f-mono); color: var(--miss); white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 16px; height: 16px; border-radius: 3px; display: inline-grid; place-items: center; font: 700 11px var(--f-mono); }
+.sw.ok { background: var(--accent-soft); color: var(--accent); }
+.sw.no { background: var(--evict-soft); color: var(--evict); }
+.clock { margin-left: auto; font: 500 12.5px var(--f-mono); }
+.clock b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Panels */
+.panels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 760px) { .panels { grid-template-columns: minmax(0, 1fr); } .clock { margin-left: 0; flex-basis: 100%; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; min-width: 0; align-content: start; }
+.p-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.p-head .rule { font: 500 12.5px var(--f-mono); color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.stat b { display: block; font: 600 22px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.stat.ok b { color: var(--accent); }
+.stat.no b { color: var(--evict); }
+.meter-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 22px; }
+.badge { font: 600 11.5px var(--f-mono); padding: 2px 8px; border-radius: 99px; }
+.badge.reset { background: var(--miss-soft); color: var(--miss); }
+.badge.refill { background: var(--accent-soft); color: var(--accent); }
+.slots { display: grid; gap: 8px; grid-template-columns: repeat(var(--cap), minmax(0, 1fr)); }
+
+/* Fixed window: one slot per allowed request in the current window */
+.slot { height: 64px; border-radius: 10px; border: 2px dashed var(--line); display: grid; place-items: center; align-content: center; gap: 2px; background: var(--bg); font: 500 11.5px var(--f-mono); color: var(--muted); transition: background .25s, border-color .25s; }
+.slot.used { border-style: solid; background: var(--surface); color: var(--ink); }
+.slot.used b { font: 600 16px/1 var(--f-mono); color: var(--accent); }
+.slot.new { background: var(--accent-soft); border-color: var(--accent); }
+.track { display: grid; gap: 4px; }
+.track .bar { height: 8px; background: var(--chip); border-radius: 99px; overflow: hidden; }
+.track .bar i { display: block; height: 100%; background: var(--miss); border-radius: 99px; transition: width .35s; }
+.track .ends { display: flex; justify-content: space-between; font: 500 11px var(--f-mono); color: var(--muted); }
+
+/* Token bucket: each slot is one token; the fill height shows fractional tokens */
+.tok { position: relative; height: 64px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); overflow: hidden; display: grid; place-items: center; transition: border-color .25s; }
+.tok i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent-soft); transition: height .35s; }
+.tok span { position: relative; font: 600 13px var(--f-mono); color: var(--ink); }
+.tok.gain { border-color: var(--accent); }
+
+.event { font-size: 14px; min-height: 66px; border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+.event.ok { background: var(--accent-soft); }
+.event.no { background: var(--evict-soft); }
+.event b { font-family: var(--f-mono); }
+.takeaway { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; max-width: none; }
+.takeaway strong { font-weight: 600; color: var(--ink); }
+
+.verdict { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 14px 16px; font-size: 15px; }
+.verdict strong { font-weight: 600; }
+
+/* Explainer: collapsible cards styled like the playbook's topic cards */
+.more { display: grid; gap: 10px; }
+.more details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.more details[open] { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.more summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 13px 16px; font: 600 16px/1.3 var(--f-display); }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::after { content: ""; margin-left: auto; width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .2s; flex: none; margin-right: 4px; }
+.more details[open] > summary::after { transform: rotate(45deg); }
+.more .explain { padding: 2px 16px 18px; }
+.explain { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px 24px; }
+.explain > div { min-width: 0; }
+.explain ul { margin: 6px 0 0; padding-left: 18px; }
+.explain li { margin: 3px 0; }
+pre { font: 12.5px/1.55 var(--f-mono); background: var(--chip); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 8px 0 0; }
+code { font: 13px var(--f-mono); background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+pre code { padding: 0; background: none; font: inherit; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="label">Rate limiting playground</span>
+    <h1>Fixed window vs token bucket</h1>
+    <p class="lede">An API rate limiter decides, for every request, whether to let it through or reply 429 Too Many Requests. Both limiters below see the same timestamped requests and enforce the same average rate. Step through a scenario and watch where their decisions differ.</p>
+  </header>
+
+  <div class="controls">
+    <div class="field grow">
+      <label class="label" for="scenario">Scenario</label>
+      <select id="scenario"></select>
+    </div>
+    <div class="field">
+      <label class="label" for="limit">Limit per 10 s</label>
+      <select id="limit"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+    </div>
+    <div class="field">
+      <label class="label" for="speed">Speed</label>
+      <select id="speed"><option value="1100">Slow</option><option value="650" selected>Normal</option><option value="250">Fast</option></select>
+    </div>
+    <div class="btns">
+      <button id="play" class="primary" type="button">Play</button>
+      <button id="stepBtn" type="button">Step</button>
+      <button id="resetBtn" type="button">Restart</button>
+    </div>
+    <p class="scenario-note" id="scenarioNote"></p>
+  </div>
+
+  <div class="tape-box">
+    <div class="legend">
+      <span class="label">Request timeline</span>
+      <span><i class="sw ok">✓</i>allowed</span>
+      <span><i class="sw no">✗</i>rejected</span>
+      <span>Left mark = fixed window, right mark = token bucket</span>
+      <span style="color:var(--miss)">┊ ↻ window reset</span>
+      <span class="clock">Virtual clock <b id="clock">0.0 s</b></span>
+    </div>
+    <div class="tape" id="tape" aria-label="Request timeline"></div>
+  </div>
+
+  <div class="verdict" id="verdict" aria-live="polite" hidden></div>
+
+  <div class="panels">
+    <section class="panel" id="p-fixed">
+      <div class="p-head"><h2>Fixed window</h2><span class="rule" data-rule></span></div>
+      <div class="stats" data-stats></div>
+      <div class="meter-head"><span class="label" data-caption></span><span class="badge reset" data-badge hidden>↻ new window, count reset to 0</span></div>
+      <div class="slots" data-slots></div>
+      <div class="track">
+        <div class="bar" aria-hidden="true"><i data-progress></i></div>
+        <div class="ends"><span data-start></span><span>clock position in this window</span><span data-end></span></div>
+      </div>
+      <div class="event" data-event aria-live="polite"></div>
+      <p class="takeaway"><strong>Takeaway:</strong> one cheap counter per client, but up to 2× the limit can slip through around a reset.</p>
+    </section>
+    <section class="panel" id="p-bucket">
+      <div class="p-head"><h2>Token bucket</h2><span class="rule" data-rule></span></div>
+      <div class="stats" data-stats></div>
+      <div class="meter-head"><span class="label" data-caption></span><span class="badge refill" data-badge hidden></span></div>
+      <div class="slots" data-slots></div>
+      <div class="event" data-event aria-live="polite"></div>
+      <p class="takeaway"><strong>Takeaway:</strong> allows bursts up to capacity, then smoothly holds the average rate, at the cost of two values to tune.</p>
+    </section>
+  </div>
+
+  <div class="more">
+    <details>
+      <summary>How the algorithms work</summary>
+      <div class="explain">
+        <div>
+          <h3>Fixed window</h3>
+          <p>Request time <code>t</code> falls in window <code>k = floor(t / W)</code>, covering <code>[kW, (k+1)W)</code>. Keep one counter per window and allow while it's below the limit.</p>
+<pre><code>k = floor(t / W)
+if k != current: current = k; count = 0
+if count &lt; limit: count += 1; allow
+else: reject</code></pre>
+          <p style="margin-top:8px"><strong>Boundary problem:</strong> the counter forgets everything at the reset, so a full limit just before 10 s plus a full limit just after lets 2× through in a fraction of a second.</p>
+        </div>
+        <div>
+          <h3>Token bucket</h3>
+          <p>Store <code>tokens</code> and when they were last updated. On each request, add what dripped in since then, capped at capacity, then try to spend one.</p>
+<pre><code>tokens = min(capacity,
+             tokens + (t - last) * rate)
+last = t
+if tokens &gt;= 1: tokens -= 1; allow
+else: reject</code></pre>
+          <p style="margin-top:8px"><strong>Capacity</strong> is the largest burst after idling; <strong>refill rate</strong> is the sustainable average. Fractions are kept: 0.1 s at 0.3 tokens/s adds 0.03.</p>
+        </div>
+        <div>
+          <h3>When to use which</h3>
+          <ul>
+            <li><strong>Fixed window</strong>: coarse quotas where a brief 2× spike is harmless, like "1,000 calls per day" on a billing plan.</li>
+            <li><strong>Token bucket</strong>: protecting a service while still allowing normal bursty clients, like a page load firing 5 calls at once. Most API gateways use it.</li>
+            <li>Sliding window variants fix the boundary problem with a little more state.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details>
+      <summary>Distributed rate limiting and Redis</summary>
+      <div class="explain">
+        <div>
+          <h3>Shared state</h3>
+          <p>With per-gateway counters, a client spread over 10 gateways gets 10× the limit. So counters live in a shared, in-memory store like Redis, keyed by client: <code>rl:{api_key}</code>.</p>
+          <ul>
+            <li>Set a TTL on each key so idle clients don't hold memory forever.</li>
+            <li>Use one trusted clock, such as Redis <code>TIME</code>, to avoid skew between gateways.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Atomic updates</h3>
+          <p>Read-then-write races: two gateways both read <code>tokens = 1</code> and both allow. A Lua script runs as one atomic step, so the second request sees <code>0</code>.</p>
+<pre><code>-- token bucket as one atomic Redis script
+local b = redis.call("HMGET", KEYS[1], "tokens", "ts")
+local tokens = tonumber(b[1]) or capacity
+local ts = tonumber(b[2]) or now
+tokens = math.min(capacity, tokens + (now - ts) * rate)
+local ok = tokens &gt;= 1
+if ok then tokens = tokens - 1 end
+redis.call("HSET", KEYS[1], "tokens", tokens, "ts", now)
+redis.call("EXPIRE", KEYS[1], ttl)
+return ok and 1 or 0</code></pre>
+          <p style="margin-top:8px">Fixed window needs no script: <code>INCR</code> is atomic, so <code>allow = INCR(key) &lt;= limit</code>.</p>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+// LIMITER-START
+// Algorithm code only: no DOM access, so tests/rate-limiter.test.js can run this block in Node.
+// Time is a virtual clock measured in seconds everywhere. Nothing here reads the real clock.
+
+var WINDOW_SECONDS = 10;
+
+// Fixed window counter. Windows are half-open: window k covers [k*W, (k+1)*W),
+// so a request at exactly 10.0 s belongs to the new window [10, 20).
+function FixedWindowCounter(limit, windowSeconds) {
+  this.limit = limit;
+  this.windowSeconds = windowSeconds;
+  this.window = null; // index k of the window we are counting, null before the first request
+  this.count = 0;     // requests allowed in that window
+}
+FixedWindowCounter.prototype.allow = function (t) {
+  var k = Math.floor(t / this.windowSeconds);
+  var reset = this.window !== null && k !== this.window;
+  if (k !== this.window) { this.window = k; this.count = 0; }
+  var allowed = this.count < this.limit;
+  if (allowed) this.count++;
+  return {
+    t: t, allowed: allowed, count: this.count, limit: this.limit, reset: reset,
+    windowStart: k * this.windowSeconds, windowEnd: (k + 1) * this.windowSeconds
+  };
+};
+
+// Treat anything within EPSILON of 1 as a full token so the result matches the math on paper.
+var EPSILON = 1e-9;
+
+// Token bucket. Starts full; refills continuously based on elapsed virtual time.
+function TokenBucket(capacity, refillPerSecond) {
+  this.capacity = capacity;
+  this.refillPerSecond = refillPerSecond;
+  this.tokens = capacity;
+  this.lastRefill = 0;
+}
+TokenBucket.prototype.allow = function (t) {
+  var elapsed = Math.max(0, t - this.lastRefill);
+  var before = this.tokens;
+  this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillPerSecond);
+  this.lastRefill = t;
+  var refilled = this.tokens - before;
+  var allowed = this.tokens >= 1 - EPSILON;
+  if (allowed) this.tokens = Math.max(0, this.tokens - 1);
+  return {
+    t: t, allowed: allowed, elapsed: elapsed, refilled: refilled,
+    tokens: this.tokens, capacity: this.capacity, refillPerSecond: this.refillPerSecond
+  };
+};
+
+// `limit` requests per window.
+function simulate(timestamps, limit, windowSeconds) {
+  var fixed = new FixedWindowCounter(limit, windowSeconds);
+  var bucket = new TokenBucket(limit, limit / windowSeconds);
+  return timestamps.map(function (t) {
+    return { t: t, fixed: fixed.allow(t), bucket: bucket.allow(t) };
+  });
+}
+
+var SCENARIOS = [
+  { id: "steady", name: "Steady traffic", limit: 3,
+    times: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29],
+    note: "One request every 2 s, slightly over the limit: watch fixed window reject in clumps while token bucket spreads its rejections out.",
+    why: "Both settle on the same long-run rate, but fixed window rejects everything late in each window, while token bucket admits a request whenever a token drips back." },
+  { id: "burst", name: "Sudden burst", limit: 3,
+    times: [4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 8, 12, 16, 20],
+    note: "After 4 s of quiet, 8 requests arrive within 0.7 s: watch whether the idle bucket lets through more than its capacity.",
+    why: "Idle time never fills the bucket past its capacity, so both cap the burst at the limit. Afterwards the bucket admits requests as tokens refill, while fixed window rejects the 8 s request because its window is still full." },
+  { id: "boundary", name: "Window-boundary burst", limit: 3,
+    times: [9.7, 9.8, 9.9, 10.0, 10.1, 10.2],
+    note: "Six requests in 0.5 s straddle the 10 s window reset: watch fixed window let all of them through while token bucket stops at three.",
+    why: "The fixed window counter forgets everything at the 10 s reset, so twice the limit passed in half a second. The token bucket refills only 0.03 tokens per 0.1 s, so it rejected the rest." }
+];
+// LIMITER-END
+
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var scenarioSel = $("scenario"), limitSel = $("limit"), speedSel = $("speed");
+  var fixedP = $("p-fixed"), bucketP = $("p-bucket");
+  // rows: every decision for the scenario, computed up front. pos: how many of them are revealed.
+  var state = { rows: [], pos: 0, timer: null };
+
+  SCENARIOS.forEach(function (s) {
+    var o = document.createElement("option"); o.value = s.id; o.textContent = s.name; scenarioSel.appendChild(o);
+  });
+  scenarioSel.value = "boundary";
+
+  function current() { return SCENARIOS.filter(function (s) { return s.id === scenarioSel.value; })[0]; }
+  function limit() { return +limitSel.value; }
+  function sec(t) { return (Math.round(t * 100) / 100) + " s"; }
+  function num(x) { return x.toFixed(2); }
+  function q(panel, sel) { return panel.querySelector("[data-" + sel + "]"); }
+
+  function loadScenario() {
+    var s = current();
+    limitSel.value = s.limit;
+    $("scenarioNote").textContent = s.note;
+    restart();
+  }
+  function restart() {
+    stop();
+    state.rows = simulate(current().times, limit(), WINDOW_SECONDS);
+    state.pos = 0;
+    render(false);
+  }
+
+  function step() {
+    if (state.pos >= state.rows.length) { stop(); return; }
+    state.pos++;
+    render(true);
+    if (state.pos >= state.rows.length) stop();
+  }
+  function play() {
+    if (state.timer) { stop(); return; }
+    if (state.pos >= state.rows.length) { state.pos = 0; render(false); }
+    $("play").textContent = "Pause";
+    step();
+    if (state.pos < state.rows.length) state.timer = setInterval(step, +speedSel.value);
+  }
+  function stop() {
+    if (state.timer) clearInterval(state.timer);
+    state.timer = null;
+    $("play").textContent = state.rows.length && state.pos >= state.rows.length ? "Replay" : "Play";
+  }
+
+
+  function counts(key) {
+    var ok = 0, no = 0;
+    for (var i = 0; i < state.pos; i++) { if (state.rows[i][key].allowed) ok++; else no++; }
+    return { ok: ok, no: no };
+  }
+  function stats(panel, c, third) {
+    q(panel, "stats").innerHTML =
+      '<div class="stat ok"><span class="label">✓ Allowed</span><b>' + c.ok + '</b></div>' +
+      '<div class="stat no"><span class="label">✗ Rejected</span><b>' + c.no + '</b></div>' +
+      '<div class="stat"><span class="label">' + third[0] + '</span><b>' + third[1] + '</b></div>';
+  }
+  function ensureChildren(el, n, cls, inner) {
+    el.style.setProperty("--cap", n);
+    if (el.children.length === n) return;
+    var html = "";
+    for (var i = 0; i < n; i++) html += '<div class="' + cls + '">' + inner + '</div>';
+    el.innerHTML = html;
+  }
+
+  function renderFixed(last, animate) {
+    var lim = limit();
+    q(fixedP, "rule").textContent = lim + " requests per " + WINDOW_SECONDS + " s";
+    stats(fixedP, counts("fixed"), ["Count", last ? last.count + "/" + lim : "0/" + lim]);
+
+    // Times of the requests allowed in the current window, one per used slot
+    var used = [];
+    if (last) for (var i = 0; i < state.pos; i++) {
+      var d = state.rows[i].fixed;
+      if (d.allowed && d.windowStart === last.windowStart) used.push(d.t);
+    }
+    var slots = q(fixedP, "slots");
+    ensureChildren(slots, lim, "slot", "");
+    for (var j = 0; j < lim; j++) {
+      var el = slots.children[j], isNew = animate && last.allowed && j === used.length - 1;
+      el.className = "slot" + (j < used.length ? " used" : "") + (isNew ? " new" : "");
+      el.innerHTML = j < used.length ? "<b>✓</b>" + sec(used[j]) : "free";
+      el.setAttribute("aria-label", j < used.length ? "Used by the request at " + sec(used[j]) : "Free");
+    }
+
+    q(fixedP, "caption").textContent = last ? "Window [" + sec(last.windowStart) + ", " + sec(last.windowEnd) + ")" : "No window yet";
+    q(fixedP, "badge").hidden = !(animate && last && last.reset);
+    q(fixedP, "start").textContent = last ? "[" + sec(last.windowStart) : "";
+    q(fixedP, "end").textContent = last ? sec(last.windowEnd) + ")" : "";
+    q(fixedP, "progress").style.width = last ? ((last.t - last.windowStart) / WINDOW_SECONDS * 100).toFixed(1) + "%" : "0%";
+
+    var ev = q(fixedP, "event");
+    ev.className = "event" + (last ? (last.allowed ? " ok" : " no") : "");
+    if (!last) ev.textContent = "Waiting for the first request. The count starts at 0.";
+    else if (last.allowed) ev.innerHTML = "<strong>✓ Allowed</strong> the request at <b>" + sec(last.t) + "</b>. " +
+      (last.reset ? "It falls in a new window, so the count reset to 0. " : "") +
+      "Count is now <b>" + last.count + " of " + lim + "</b>.";
+    else ev.innerHTML = "<strong>✗ Rejected</strong> the request at <b>" + sec(last.t) + "</b>. This window already has <b>" +
+      lim + " of " + lim + "</b>. Retry after " + sec(last.windowEnd - last.t) + ", when it resets.";
+  }
+
+  function renderBucket(last, animate) {
+    var cap = limit(), rate = cap / WINDOW_SECONDS;
+    var tokens = last ? last.tokens : cap;
+    q(bucketP, "rule").textContent = "capacity " + cap + ", refill " + rate + " tokens/s";
+    stats(bucketP, counts("bucket"), ["Tokens", num(tokens)]);
+    q(bucketP, "caption").textContent = num(tokens) + " of " + cap + " tokens";
+
+    var before = last ? last.tokens + (last.allowed ? 1 : 0) - last.refilled : cap;
+    var slots = q(bucketP, "slots");
+    ensureChildren(slots, cap, "tok", "<i></i><span></span>");
+    for (var i = 0; i < cap; i++) {
+      var fill = Math.min(1, Math.max(0, tokens - i));
+      var prevFill = Math.min(1, Math.max(0, before - i));
+      var after = Math.min(1, Math.max(0, before + (last ? last.refilled : 0) - i));
+      var el = slots.children[i];
+      el.className = "tok" + (animate && last && after > prevFill + 0.001 ? " gain" : "");
+      el.firstChild.style.height = (fill * 100).toFixed(1) + "%";
+      el.lastChild.textContent = fill >= 1 ? "1" : fill > 0.005 ? num(fill) : "";
+      el.setAttribute("aria-label", "Token slot " + (i + 1) + ": " + num(fill) + " full");
+    }
+
+    var badge = q(bucketP, "badge");
+    badge.hidden = !(last && last.refilled > 0.005);
+    if (last) badge.textContent = "+" + num(last.refilled) + " refilled";
+
+    var ev = q(bucketP, "event");
+    ev.className = "event" + (last ? (last.allowed ? " ok" : " no") : "");
+    if (!last) { ev.textContent = "Waiting for the first request. The bucket starts full."; return; }
+    var refill = last.refilled > 0.005
+      ? "Refilled +" + num(last.refilled) + " over " + sec(last.elapsed) + (last.refilled < last.elapsed * rate - 0.005 ? " (capped at " + cap + ")" : "") + ". "
+      : last.elapsed > 0 ? "Already full, nothing to refill. " : "No time passed, nothing refilled. ";
+    if (last.allowed) ev.innerHTML = "<strong>✓ Allowed</strong> the request at <b>" + sec(last.t) + "</b>. " + refill +
+      "Spent 1 token; <b>" + num(last.tokens) + "</b> left.";
+    else ev.innerHTML = "<strong>✗ Rejected</strong> the request at <b>" + sec(last.t) + "</b>. " + refill +
+      "Only <b>" + num(last.tokens) + "</b> tokens; it needs 1. Retry after " + ((1 - last.tokens) / rate).toFixed(1) + " s.";
+  }
+
+  function mark(d) { return '<i class="' + (d ? (d.allowed ? "ok" : "no") : "") + '">' + (d ? (d.allowed ? "✓" : "✗") : "") + '</i>'; }
+  function word(d) { return d.allowed ? "allowed" : "rejected"; }
+
+  function renderTape(animate) {
+    var tape = $("tape"), html = "", prevWindow = null;
+    state.rows.forEach(function (r, i) {
+      var w = Math.floor(r.t / WINDOW_SECONDS);
+      if (prevWindow !== null && w !== prevWindow) {
+        html += '<div class="wmark" role="img" aria-label="Fixed window resets at ' + sec(w * WINDOW_SECONDS) + '"><span>↻ ' + sec(w * WINDOW_SECONDS) + '</span></div>';
+      }
+      prevWindow = w;
+      var done = i < state.pos;
+      var label = "Request at " + sec(r.t) + (done ? ": fixed window " + word(r.fixed) + ", token bucket " + word(r.bucket) : ", not processed yet");
+      html += '<div class="step' + (done ? " done" : "") + (i === state.pos ? " cur" : "") + '" role="img" aria-label="' + label + '">' +
+        '<span class="k">' + (Math.round(r.t * 100) / 100) + 's</span><span class="m">' +
+        mark(done && r.fixed) + mark(done && r.bucket) + '</span></div>';
+    });
+    tape.innerHTML = html;
+    var cur = tape.querySelector(".cur") || tape.lastElementChild;
+    if (cur && animate) tape.scrollLeft = Math.max(0, cur.offsetLeft - tape.clientWidth / 2);
+  }
+
+  function render(animate) {
+    var last = state.pos > 0 ? state.rows[state.pos - 1] : null;
+    $("clock").textContent = last ? last.t.toFixed(1) + " s" : "0.0 s";
+    renderTape(animate);
+    renderFixed(last && last.fixed, animate);
+    renderBucket(last && last.bucket, animate);
+
+    var done = state.pos >= state.rows.length, v = $("verdict");
+    $("stepBtn").disabled = done;
+    v.hidden = !done;
+    if (done) {
+      var f = counts("fixed"), b = counts("bucket"), n = state.rows.length;
+      v.innerHTML = "<strong>Fixed window allowed " + f.ok + " of " + n + "; token bucket allowed " + b.ok + " of " + n + ".</strong> " + current().why;
+    }
+    if (!state.timer) $("play").textContent = done ? "Replay" : "Play";
+  }
+
+  scenarioSel.addEventListener("change", loadScenario);
+  limitSel.addEventListener("change", restart);
+  speedSel.addEventListener("change", function () { if (state.timer) { stop(); play(); } });
+  $("play").addEventListener("click", play);
+  $("stepBtn").addEventListener("click", function () { stop(); step(); });
+  $("resetBtn").addEventListener("click", restart);
+
+  loadScenario();
+})();
+</script>

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 OUT = ROOT / "dist"
 
-PAGES = ["index.html", "lru-lfu.html", "consistent-hashing.html"]
+PAGES = ["index.html", "lru-lfu.html", "consistent-hashing.html", "rate-limiter.html"]
 
 HEAD = """<!doctype html>
 <html lang="en">
